@@ -1,1 +1,11 @@
-{ "$schema": "https://openapi.vercel.sh/vercel.json", "cleanUrls": true, "trailingSlash": false }
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "trailingSlash": false,
+  "redirects": [
+    { "source": "/essenza-tuinen", "destination": "/", "permanent": false },
+    { "source": "/essenza-tuinen/:path*", "destination": "/:path*", "permanent": false }
+  ],
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}
