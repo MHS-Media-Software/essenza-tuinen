@@ -1,6 +1,9 @@
 // Vercel serverless function: genereert een fotorealistische AI-impressie van het
-// tuinontwerp. Image-to-image via OpenRouter (Gemini image-model), met de
-// plattegrond-PNG als conditioning. Sleutel staat in env OPENROUTER_API_KEY.
+// tuinontwerp via OpenRouter (Gemini image-model).
+// - imageDataUrl : de plattegrond-PNG (conditioning voor de indeling)
+// - photoDataUrl : (optioneel) foto van de huidige tuin — het ontwerp wordt hierin verwerkt
+// - prompt       : de tekstinstructie (client bouwt deze incl. indelingsbeschrijving)
+// Sleutel staat in env OPENROUTER_API_KEY.
 module.exports = async (req, res) => {
   if (req.method !== 'POST') { res.status(405).json({ ok: false, error: 'method' }); return; }
   const key = process.env.OPENROUTER_API_KEY;
@@ -9,12 +12,14 @@ module.exports = async (req, res) => {
   try {
     let body = req.body;
     if (typeof body === 'string') { try { body = JSON.parse(body); } catch { body = {}; } }
-    const { imageDataUrl, prompt } = body || {};
+    const { imageDataUrl, photoDataUrl, prompt } = body || {};
     if (!prompt) { res.status(400).json({ ok: false, error: 'geen prompt' }); return; }
 
-    const content = imageDataUrl
-      ? [{ type: 'text', text: prompt }, { type: 'image_url', image_url: { url: imageDataUrl } }]
-      : prompt;
+    // Volgorde van de beelden telt: eerst de huidige-tuinfoto (het canvas dat we herontwerpen),
+    // dan de plattegrond (de indeling die we erin verwerken).
+    const content = [{ type: 'text', text: prompt }];
+    if (photoDataUrl) content.push({ type: 'image_url', image_url: { url: photoDataUrl } });
+    if (imageDataUrl) content.push({ type: 'image_url', image_url: { url: imageDataUrl } });
 
     const model = process.env.OR_IMAGE_MODEL || 'google/gemini-3.1-flash-image';
     const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
