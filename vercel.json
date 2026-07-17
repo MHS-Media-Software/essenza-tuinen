@@ -1,6 +1,9 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "trailingSlash": false,
+  "functions": {
+    "api/render.js": { "maxDuration": 60 }
+  },
   "redirects": [
     { "source": "/essenza-tuinen", "destination": "/", "permanent": false },
     { "source": "/essenza-tuinen/:path*", "destination": "/:path*", "permanent": false }
