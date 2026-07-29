@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  ArrowUpRight, ArrowRight, Search, Trash2, RotateCcw, Map as MapIcon, Box, Wand2, Upload,
+  ArrowUpRight, ArrowRight, Search, Trash2, RotateCcw, Map as MapIcon, Box, Wand2, Upload, Download,
   CheckCircle, Check, Plus, Phone, MapPin, Info, Sparkles, X,
   Grid2x2, Sprout, Flower2, Rows3, Waves, Droplets, Fence, Columns3, TreePine, Warehouse, Building2, Square, PenTool,
 } from 'lucide-react';
@@ -73,10 +73,12 @@ function shade(hex, f) {
 }
 function itemPrice(it, tier) {
   const def = DEF[it.type]; if (!def) return 0;
-  const p = def.prijs[tier];
-  if (def.unit === 'm2') return it.w * it.d * p;
-  if (def.unit === 'm') return Math.max(it.w, it.d) * p;
-  return p;
+  if (def.unit === 'info') return 0;
+  // Gekozen materiaal (uit de backend) bepaalt de prijs; anders de tier-schatting.
+  const unitP = it.materiaal ? it.materiaal.prijs : def.prijs[tier];
+  if (def.unit === 'm2') return it.w * it.d * unitP;
+  if (def.unit === 'm') return Math.max(it.w, it.d) * unitP;
+  return unitP;
 }
 function itemHoeveelheid(it) {
   const def = DEF[it.type];
@@ -183,6 +185,46 @@ function pat2d(def) {
   return null;
 }
 
+// Vrije maatvoering: houdt een ruwe invoerstring vast en commit (geklemd) pas bij
+// blur/Enter. Voorkomt de "typ 10 → wordt 30"-bug (klemmen tijdens typen).
+function DimInput({ value, onCommit, min = 3, max = 60, className, style }) {
+  const [raw, setRaw] = useState(String(value));
+  useEffect(() => { setRaw(String(value)); }, [value]);
+  const commit = () => { const n = Math.round(+raw); onCommit(isNaN(n) || raw === '' ? value : clamp(n, min, max)); };
+  return (
+    <input type="number" inputMode="numeric" min={min} max={max} value={raw}
+      onChange={e => setRaw(e.target.value)} onBlur={commit}
+      onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+      className={className} style={style} />
+  );
+}
+
+// Plattegrond + stuklijst → printbaar venster (op schaal, "Opslaan als PDF" via print).
+function exportPlanPDF({ items, plotW, plotD, cutCfg, tier, totals, adres }) {
+  const plan = planToDataUrl(items, plotW, plotD, cutCfg);
+  const tierLabel = TIERS.find(t => t.key === tier).label;
+  const rows = items.map(it => `<tr><td>${DEF[it.type].label}${it.materiaal ? ` — ${it.materiaal.naam}` : ''}</td><td>${itemHoeveelheid(it)}</td><td style="text-align:right">${DEF[it.type].unit === 'info' ? '—' : euro(itemPrice(it, tier))}</td></tr>`).join('');
+  const w = window.open('', '_blank'); if (!w) return;
+  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Tuinontwerp Essenza Tuinen</title>
+    <style>
+      *{font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:#1F2113;box-sizing:border-box}
+      body{margin:0;padding:28px}h1{font-size:20px;margin:0 0 2px}.sub{color:#6B7060;font-size:13px;margin:0 0 16px}
+      img{width:100%;max-width:640px;border:1px solid #E6E8DC;border-radius:8px;display:block;margin-bottom:6px}
+      .scale{font-size:11px;color:#6B7060;margin-bottom:16px}
+      table{width:100%;border-collapse:collapse;font-size:13px}td{padding:6px 4px;border-bottom:1px solid #E6E8DC}
+      .tot{display:flex;justify-content:space-between;margin-top:12px;padding:12px;background:#F5F7EE;border-radius:8px;font-weight:700}
+      .foot{color:#6B7060;font-size:11px;margin-top:14px}
+      @media print{body{padding:0}}
+    </style></head><body>
+    <h1>Tuinontwerp</h1><p class="sub">Essenza Tuinen · ${adres?.naam ? adres.naam + ' · ' : ''}${plotW} × ${plotD} m${cutCfg ? ' (L-vorm)' : ''}</p>
+    <img src="${plan}"/><p class="scale">Plattegrond op schaal · elk raster­vakje = 1 × 1 meter</p>
+    <table><thead><tr><td><b>Onderdeel</b></td><td><b>Hoeveelheid</b></td><td style="text-align:right"><b>Richtprijs</b></td></tr></thead><tbody>${rows}</tbody></table>
+    <div class="tot"><span>Totale richtprijs · ${tierLabel}</span><span>${euro(totals[tier])}</span></div>
+    <p class="foot">Indicatief en exclusief btw. De definitieve offerte stellen wij op na een schouw.</p>
+    <script>window.onload=function(){setTimeout(function(){window.print();},250);}</script></body></html>`);
+  w.document.close();
+}
+
 let _uid = 1;
 
 export default function HoverniersConfigurator() {
@@ -200,6 +242,17 @@ export default function HoverniersConfigurator() {
   const [sel, setSel] = useState(null);
   const [tier, setTier] = useState('standaard');
   const [view, setView] = useState('2d');
+  const [catalog, setCatalog] = useState({});   // {categorie: [product]} uit de backend
+  const [past, setPast] = useState([]);          // undo-historie (JSON-snapshots)
+
+  useEffect(() => {
+    fetch('/api/products').then(r => r.json()).then(d => {
+      if (d && d.ok) { const by = {}; d.products.forEach(p => { (by[p.categorie] = by[p.categorie] || []).push(p); }); setCatalog(by); }
+    }).catch(() => {});
+  }, []);
+  const pushHist = () => setPast(p => [...p.slice(-49), JSON.stringify(items)]);
+  const undo = () => setPast(p => { if (!p.length) return p; setItems(JSON.parse(p[p.length - 1])); setSel(null); return p.slice(0, -1); });
+  const setMateriaal = (id, mat) => { pushHist(); setItems(l => l.map(it => it.id === id ? { ...it, materiaal: mat } : it)); };
 
   const stappen = ['Uw kavel', 'Ontwerp', 'Offerte'];
 
@@ -220,6 +273,7 @@ export default function HoverniersConfigurator() {
   };
 
   const addItem = (key) => {
+    pushHist();
     const def = DEF[key];
     setItems(l => {
       const off = (l.length % 6) * 1.1;
@@ -231,8 +285,8 @@ export default function HoverniersConfigurator() {
       return [...l, it];
     });
   };
-  const delItem = (id) => { setItems(l => l.filter(i => i.id !== id)); setSel(s => s === id ? null : s); };
-  const wisAlles = () => { setItems([]); setSel(null); };
+  const delItem = (id) => { pushHist(); setItems(l => l.filter(i => i.id !== id)); setSel(s => s === id ? null : s); };
+  const wisAlles = () => { if (items.length) pushHist(); setItems([]); setSel(null); };
 
   // Bij het wijzigen van het tuinformaat: elementen binnen de nieuwe grenzen houden
   const setPlot = (w, d) => {
@@ -311,9 +365,9 @@ export default function HoverniersConfigurator() {
                     </div>
                     <div className="grid grid-cols-2 gap-4 mb-6">
                       <label className="block"><span className="text-[11px] font-bold uppercase tracking-[0.2em]" style={{ color: MUTED }}>Breedte (m)</span>
-                        <input type="number" min={3} max={60} value={plotW} onChange={e => setPlot(+e.target.value || 0, plotD)} className="w-full mt-1.5 px-4 py-3 text-sm rounded-xl border outline-none" style={{ borderColor: LINE, background: WHITE, color: INK }} /></label>
+                        <DimInput value={plotW} onCommit={v => setPlot(v, plotD)} className="w-full mt-1.5 px-4 py-3 text-sm rounded-xl border outline-none" style={{ borderColor: LINE, background: WHITE, color: INK }} /></label>
                       <label className="block"><span className="text-[11px] font-bold uppercase tracking-[0.2em]" style={{ color: MUTED }}>Diepte (m)</span>
-                        <input type="number" min={3} max={60} value={plotD} onChange={e => setPlot(plotW, +e.target.value || 0)} className="w-full mt-1.5 px-4 py-3 text-sm rounded-xl border outline-none" style={{ borderColor: LINE, background: WHITE, color: INK }} /></label>
+                        <DimInput value={plotD} onCommit={v => setPlot(plotW, v)} className="w-full mt-1.5 px-4 py-3 text-sm rounded-xl border outline-none" style={{ borderColor: LINE, background: WHITE, color: INK }} /></label>
                     </div>
                     {/* Tuinvorm: rechthoek of L-vorm (hoektuin) */}
                     <div className="mb-5">
@@ -354,6 +408,7 @@ export default function HoverniersConfigurator() {
                 <motion.div key="ontwerp" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.25 }}>
                   <Ontwerper plotW={plotW} plotD={plotD} setPlot={setPlot} cutCfg={cutCfg} items={items} setItems={setItems} sel={sel} setSel={setSel}
                     view={view} setView={setView} addItem={addItem} delItem={delItem} wisAlles={wisAlles}
+                    catalog={catalog} setMateriaal={setMateriaal} pushHist={pushHist} undo={undo} canUndo={past.length > 0}
                     tier={tier} setTier={setTier} totals={totals} adres={adres} onTerug={() => setStep(0)} onVerder={() => setStep(2)} />
                 </motion.div>
               )}
@@ -372,7 +427,9 @@ export default function HoverniersConfigurator() {
 }
 
 // ── Ontwerp-stap ─────────────────────────────────────────────────────────────
-function Ontwerper({ plotW, plotD, setPlot, cutCfg, items, setItems, sel, setSel, view, setView, addItem, delItem, wisAlles, tier, setTier, totals, adres, onTerug, onVerder }) {
+function Ontwerper({ plotW, plotD, setPlot, cutCfg, items, setItems, sel, setSel, view, setView, addItem, delItem, wisAlles, catalog = {}, setMateriaal, pushHist, undo, canUndo, tier, setTier, totals, adres, onTerug, onVerder }) {
+  const selItem = items.find(i => i.id === sel) || null;
+  const selMats = selItem ? (catalog[selItem.type] || []) : [];
   const wrapRef = useRef(null);
   const [cw, setCw] = useState(720);
   const maxH = 520;
@@ -410,14 +467,14 @@ function Ontwerper({ plotW, plotD, setPlot, cutCfg, items, setItems, sel, setSel
     return () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); };
   }, [plotW, plotD, cutCfg, setItems]);
 
-  const startMove = (e, it) => { e.stopPropagation(); setSel(it.id); drag.current = { mode: 'move', id: it.id, sx: e.clientX, sy: e.clientY, ox: it.x, oy: it.y }; };
-  const startResize = (e, it) => { e.stopPropagation(); setSel(it.id); drag.current = { mode: 'resize', id: it.id, sx: e.clientX, sy: e.clientY, ow: it.w, oh: it.d }; };
+  const startMove = (e, it) => { e.stopPropagation(); setSel(it.id); pushHist && pushHist(); drag.current = { mode: 'move', id: it.id, sx: e.clientX, sy: e.clientY, ox: it.x, oy: it.y }; };
+  const startResize = (e, it) => { e.stopPropagation(); setSel(it.id); pushHist && pushHist(); drag.current = { mode: 'resize', id: it.id, sx: e.clientX, sy: e.clientY, ow: it.w, oh: it.d }; };
 
   // Cache: alleen opnieuw genereren als het ontwerp (of de foto) is gewijzigd.
   const renderCache = useRef({ sig: null, img: null });
   const sigOf = () => JSON.stringify({
     p: [plotW, plotD], t: tier, c: cutCfg,
-    it: items.map(i => [i.type, +i.x.toFixed(2), +i.y.toFixed(2), +i.w.toFixed(2), +i.d.toFixed(2)]),
+    it: items.map(i => [i.type, +i.x.toFixed(2), +i.y.toFixed(2), +i.w.toFixed(2), +i.d.toFixed(2), i.materiaal ? i.materiaal.id : 0]),
     ph: photo ? (photo.length + ':' + photo.slice(-24)) : 'none',
   });
 
@@ -446,7 +503,9 @@ function Ontwerper({ plotW, plotD, setPlot, cutCfg, items, setItems, sel, setSel
       const gebouwNote = heeftGebouw ? 'Er staat een bestaand gebouw in of aan de tuin (grijs blok met dak in de plattegrond). Behoud dit gebouw exact op zijn plek en ontwerp eromheen; het is geen beplanting.' : '';
       const tierLabel = TIERS.find(t => t.key === tier).label;
       const legend = 'Kleurcodering in de plattegrond: grijs = natuurstenen terras/bestrating, lichtgroen (ondergrond) = strak gemaaid gazon, donkergroen vlak = border vol beplanting en bloemen, warm bruin = hardhouten vlonder of schutting, blauw = vijver of zwembad, klein rond = boom, licht beige = tuinhuis, grijs blok met dak = bestaand gebouw, donkergrijs hoekvlak = buiten de tuin.';
-      const regels = `ZEER BELANGRIJK — voeg absoluut NIETS toe dat niet als gekleurd vlak in de plattegrond staat. GEEN extra planten, bloemen, struiken, borders, hagen, bomen, potten, tuinmeubels, paden of decoratie. ${heeftBorder ? 'Beplanting staat alleen in de donkergroene bordervlakken; daarbuiten geen enkele plant.' : 'Er staan GEEN borders in dit ontwerp, dus er zijn NERGENS planten, struiken of bloemen. Alleen gazon.'} Gazon is kort gemaaid gras zonder enige beplanting. Alle ruimte zonder gekleurd vlak is uitsluitend gazon. Houd je exact aan de posities, vormen, aantallen en verhoudingen van de gekleurde vlakken. ${vormNote} ${gebouwNote}`;
+      const gekozen = items.filter(i => i.materiaal).map(i => `${DEF[i.type].label}: ${i.materiaal.naam}`);
+      const matNote = gekozen.length ? ` Gebruik exact deze gekozen materialen/uitstraling: ${gekozen.join('; ')}.` : '';
+      const regels = `ZEER BELANGRIJK — voeg absoluut NIETS toe dat niet als gekleurd vlak in de plattegrond staat. GEEN extra planten, bloemen, struiken, borders, hagen, bomen, potten, tuinmeubels, paden of decoratie. ${heeftBorder ? 'Beplanting staat alleen in de donkergroene bordervlakken; daarbuiten geen enkele plant.' : 'Er staan GEEN borders in dit ontwerp, dus er zijn NERGENS planten, struiken of bloemen. Alleen gazon.'} Gazon is kort gemaaid gras zonder enige beplanting. Alle ruimte zonder gekleurd vlak is uitsluitend gazon. Houd je exact aan de posities, vormen, aantallen en verhoudingen van de gekleurde vlakken.${matNote} ${vormNote} ${gebouwNote}`;
       let prompt;
       if (photo) {
         prompt = `Herontwerp de tuin op de EERSTE afbeelding (foto van de huidige tuin van de klant) volgens de TWEEDE afbeelding (de plattegrond met het nieuwe ontwerp). Behoud het huis, de erfgrenzen en het camerastandpunt en perspectief van de foto, maar vervang de tuininrichting volledig door het ontwerp uit de plattegrond. ${legend} ${regels}\nIndeling die je moet aanhouden:\n${desc}\nFotorealistisch, ${tierLabel}-afwerking van hoog niveau, realistische materialen en texturen, zacht daglicht, geen tekst, geen mensen, geen watermerk.`;
@@ -494,16 +553,18 @@ function Ontwerper({ plotW, plotD, setPlot, cutCfg, items, setItems, sel, setSel
               <button onClick={() => setView('3d')} className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-bold transition-all" style={view === '3d' ? { background: WHITE, color: NAVY, boxShadow: '0 1px 4px rgba(0,0,0,0.08)' } : { color: MUTED }}><Box className="w-3.5 h-3.5" /> 3D-weergave</button>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
-              {/* Tuinformaat aanpasbaar */}
+              {/* Tuinformaat aanpasbaar (vrije invoer) */}
               <div className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg" style={{ border: `1px solid ${LINE}` }}>
                 <span className="text-[11px] font-bold" style={{ color: MUTED }}>Tuin</span>
-                <input type="number" min={3} max={60} value={plotW} onChange={e => setPlot(+e.target.value || 0, plotD)} className="w-11 text-xs font-bold text-center outline-none" style={{ color: NAVY }} />
+                <DimInput value={plotW} onCommit={v => setPlot(v, plotD)} className="w-11 text-xs font-bold text-center outline-none" style={{ color: NAVY }} />
                 <span className="text-xs" style={{ color: MUTED }}>×</span>
-                <input type="number" min={3} max={60} value={plotD} onChange={e => setPlot(plotW, +e.target.value || 0)} className="w-11 text-xs font-bold text-center outline-none" style={{ color: NAVY }} />
+                <DimInput value={plotD} onCommit={v => setPlot(plotW, v)} className="w-11 text-xs font-bold text-center outline-none" style={{ color: NAVY }} />
                 <span className="text-[11px]" style={{ color: MUTED }}>m</span>
               </div>
+              <button onClick={() => undo && undo()} disabled={!canUndo} title="Ongedaan maken" className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-lg transition-all disabled:opacity-30" style={{ border: `1px solid ${LINE}`, color: NAVY }}><RotateCcw className="w-3.5 h-3.5" /> Ongedaan</button>
+              <button onClick={() => exportPlanPDF({ items, plotW, plotD, cutCfg, tier, totals, adres })} disabled={items.length === 0} title="Opslaan als PDF / printen op schaal" className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-lg transition-all disabled:opacity-30" style={{ border: `1px solid ${LINE}`, color: NAVY }}><Download className="w-3.5 h-3.5" /> PDF</button>
               <button onClick={openAI} disabled={items.length === 0} className="inline-flex items-center gap-1.5 text-xs font-bold px-3.5 py-2 rounded-lg text-white transition-all hover:scale-105 disabled:opacity-30" style={{ background: BLUE }}><Wand2 className="w-3.5 h-3.5" /> Breng tot leven</button>
-              <button onClick={wisAlles} className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-lg transition-all" style={{ border: `1px solid ${LINE}`, color: MUTED }}><RotateCcw className="w-3.5 h-3.5" /></button>
+              <button onClick={wisAlles} disabled={items.length === 0} title="Alles wissen" className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-lg transition-all disabled:opacity-30" style={{ border: `1px solid #f0c4c4`, color: '#C0392B' }}><Trash2 className="w-3.5 h-3.5" /> Wis</button>
             </div>
           </div>
 
@@ -542,11 +603,48 @@ function Ontwerper({ plotW, plotD, setPlot, cutCfg, items, setItems, sel, setSel
               <IsoView items={items} plotW={plotW} plotD={plotD} width={canPxW} cutCfg={cutCfg} />
             )}
           </div>
-          <p className="text-[11px] mt-3 text-center" style={{ color: MUTED }}>Klik een element aan om te verplaatsen, de maat te wijzigen (hoekje) of te verwijderen. Pas rechtsboven het tuinformaat aan.</p>
+          <div className="flex items-center justify-center gap-4 mt-3 flex-wrap">
+            {view === '2d' && (
+              <div className="flex items-center gap-1.5" title="Schaalverdeling">
+                <div style={{ width: pxPerM, height: 6, background: NAVY, borderLeft: `2px solid ${NAVY}`, borderRight: `2px solid ${NAVY}`, position: 'relative' }} />
+                <span className="text-[11px] font-bold" style={{ color: NAVY }}>1 m</span>
+                <span className="text-[11px]" style={{ color: MUTED }}>· elk vakje = 1 × 1 m</span>
+              </div>
+            )}
+            <p className="text-[11px]" style={{ color: MUTED }}>Klik een element aan om te verplaatsen, de maat te wijzigen (hoekje) of een materiaal te kiezen.</p>
+          </div>
         </div>
 
         {/* Prijspaneel */}
         <div className="rounded-3xl p-5 h-fit lg:sticky lg:top-28" style={{ background: WHITE, border: `1px solid ${LINE}` }}>
+          {/* Materiaalkeuze voor het geselecteerde element (uit de backend) */}
+          {selItem && selMats.length > 0 && (
+            <div className="mb-5 pb-5 border-b" style={{ borderColor: LINE }}>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-[11px] font-bold uppercase tracking-[0.2em]" style={{ color: BLUE }}>Materiaal · {DEF[selItem.type].label}</p>
+                <button onClick={() => delItem(selItem.id)} className="inline-flex items-center gap-1 text-[11px] font-bold" style={{ color: '#C0392B' }}><Trash2 className="w-3 h-3" /> Verwijder</button>
+              </div>
+              <div className="space-y-1.5 max-h-64 overflow-y-auto pr-0.5">
+                <button onClick={() => setMateriaal(selItem.id, null)} className="w-full flex items-center gap-2.5 p-2 rounded-lg text-left transition-all"
+                  style={!selItem.materiaal ? { background: SOFT, border: `1px solid ${BLUE}` } : { border: `1px solid ${LINE}`, background: WHITE }}>
+                  <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: LIGHT }}><Sparkles className="w-4 h-4" style={{ color: MUTED }} /></div>
+                  <span className="flex-1 min-w-0"><span className="block text-xs font-bold" style={{ color: NAVY }}>Standaard (schatting)</span><span className="block text-[10px]" style={{ color: MUTED }}>prijs volgens niveau</span></span>
+                </button>
+                {selMats.map(pr => {
+                  const on = selItem.materiaal && selItem.materiaal.id === pr.id;
+                  return (
+                    <button key={pr.id} onClick={() => setMateriaal(selItem.id, { id: pr.id, naam: pr.naam, foto: pr.foto, prijs: pr.prijs, eenheid: pr.eenheid })}
+                      className="w-full flex items-center gap-2.5 p-2 rounded-lg text-left transition-all"
+                      style={on ? { background: SOFT, border: `1px solid ${BLUE}` } : { border: `1px solid ${LINE}`, background: WHITE }}>
+                      <div className="w-9 h-9 rounded-lg bg-cover bg-center flex-shrink-0" style={pr.foto ? { backgroundImage: `url(${pr.foto})` } : { background: DEF[selItem.type].color }} />
+                      <span className="flex-1 min-w-0"><span className="block text-xs font-bold truncate" style={{ color: NAVY }}>{pr.naam}</span><span className="block text-[10px]" style={{ color: MUTED }}>{euro(pr.prijs)}/{pr.eenheid}</span></span>
+                      {on && <Check className="w-4 h-4 flex-shrink-0" style={{ color: BLUE }} />}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
           <p className="text-[11px] font-bold uppercase tracking-[0.2em] mb-1" style={{ color: BLUE }}>Prijsindicatie</p>
           <p className="text-[11px] mb-4" style={{ color: MUTED }}>Kies een niveau. De prijs telt live op.</p>
           <div className="space-y-2 mb-5">
