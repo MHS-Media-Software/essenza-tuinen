@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>Essenza Tuinen · Beheer</title>
+  <link rel="icon" type="image/png" href="/favicon.png" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = { theme: { extend: { colors: {
+      brand: { 50:'#eef7f0',100:'#d7ecdd',500:'#0B9D46',600:'#087A37',700:'#065c29',900:'#1F2113' },
+      olijf: '#1F2113'
+    }, fontFamily: { h: ['Poppins','sans-serif'], b: ['Inter','sans-serif'] } } } };
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@600;700&display=swap" rel="stylesheet">
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <style>
+    body{font-family:'Inter',sans-serif;background:#F5F7EE;color:#1F2113}
+    .font-h{font-family:'Poppins',sans-serif}
+    [x-cloak]{display:none!important}
+    .card{background:#fff;border:1px solid #E6E8DC;border-radius:1rem}
+    .btn{display:inline-flex;align-items:center;gap:.4rem;font-weight:700;border-radius:.7rem;transition:all .15s;font-size:.85rem}
+    .btn-primary{background:#0B9D46;color:#fff;padding:.6rem 1.1rem}.btn-primary:hover{background:#087A37}
+    .btn-sec{background:#fff;border:1px solid #E6E8DC;color:#1F2113;padding:.55rem 1rem}.btn-sec:hover{background:#F5F7EE}
+    .btn-danger{background:#fff;border:1px solid #f0c4c4;color:#C0392B;padding:.5rem .8rem}
+    .inp{width:100%;padding:.6rem .8rem;border:1px solid #E6E8DC;border-radius:.6rem;font-size:.9rem;outline:none;background:#fff}
+    .inp:focus{border-color:#0B9D46}
+    .lbl{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#6B7060}
+    .navi{display:flex;align-items:center;gap:.6rem;padding:.6rem .9rem;border-radius:.7rem;font-weight:600;color:#4b5043;cursor:pointer;font-size:.9rem}
+    .navi.active{background:#E4F2E8;color:#087A37}
+    .navi:hover:not(.active){background:#F5F7EE}
+    .skel{background:linear-gradient(90deg,#eee,#f6f6f6,#eee);background-size:200% 100%;animation:sh 1.2s infinite}
+    @keyframes sh{0%{background-position:200% 0}100%{background-position:-200% 0}}
+  </style>
+</head>
+<body x-data="admin()" x-init="init()" x-cloak>
+
+  <!-- LOGIN -->
+  <div x-show="!authed" class="min-h-screen flex items-center justify-center p-4" style="background:linear-gradient(135deg,#1F2113,#2C3019)">
+    <div class="card w-full max-w-sm p-8">
+      <img src="/favicon.png" class="w-14 h-14 rounded-2xl mx-auto mb-4" alt="">
+      <h1 class="font-h text-xl font-bold text-center mb-1" style="color:#1F2113">Essenza Tuinen</h1>
+      <p class="text-center text-sm mb-6" style="color:#6B7060">Beheeromgeving</p>
+      <form @submit.prevent="login()">
+        <label class="lbl">Wachtwoord</label>
+        <input type="password" x-model="pw" class="inp mt-1 mb-3" placeholder="••••••••" autofocus>
+        <p x-show="loginErr" x-text="loginErr" class="text-xs mb-3" style="color:#C0392B"></p>
+        <button class="btn btn-primary w-full justify-center" :disabled="busy" x-text="busy?'Bezig…':'Inloggen'"></button>
+      </form>
+    </div>
+  </div>
+
+  <!-- APP -->
+  <div x-show="authed" class="min-h-screen flex">
+    <!-- Sidebar -->
+    <aside class="w-60 shrink-0 bg-white border-r p-4 hidden md:flex flex-col" style="border-color:#E6E8DC">
+      <div class="flex items-center gap-2 mb-6 px-1">
+        <img src="/favicon.png" class="w-9 h-9 rounded-xl" alt="">
+        <div><p class="font-h font-bold text-sm leading-tight">Essenza Tuinen</p><p class="text-[11px]" style="color:#6B7060">Beheer</p></div>
+      </div>
+      <nav class="space-y-1 flex-1">
+        <div class="navi" :class="view==='dashboard'&&'active'" @click="view='dashboard'">Dashboard</div>
+        <div class="navi" :class="view==='leads'&&'active'" @click="view='leads';loadLeads()">Aanvragen <span x-show="leads.length" class="ml-auto text-[11px] font-bold px-1.5 rounded-full" style="background:#E4F2E8;color:#087A37" x-text="leads.length"></span></div>
+        <div class="navi" :class="view==='products'&&'active'" @click="view='products';loadProducts()">Producten &amp; prijzen</div>
+        <div class="navi" :class="view==='settings'&&'active'" @click="view='settings'">Instellingen</div>
+      </nav>
+      <button class="btn btn-sec justify-center mt-4" @click="logout()">Uitloggen</button>
+    </aside>
+
+    <!-- Mobile topbar -->
+    <div class="md:hidden fixed top-0 inset-x-0 bg-white border-b z-20 flex items-center gap-2 px-3 py-2" style="border-color:#E6E8DC">
+      <img src="/favicon.png" class="w-8 h-8 rounded-lg">
+      <select class="inp !py-1.5 flex-1" x-model="view" @change="view==='leads'&&loadLeads(); view==='products'&&loadProducts()">
+        <option value="dashboard">Dashboard</option><option value="leads">Aanvragen</option>
+        <option value="products">Producten &amp; prijzen</option><option value="settings">Instellingen</option>
+      </select>
+      <button class="btn btn-sec !px-3" @click="logout()">Uit</button>
+    </div>
+
+    <main class="flex-1 p-4 md:p-8 mt-12 md:mt-0 max-w-6xl">
+
+      <!-- DASHBOARD -->
+      <section x-show="view==='dashboard'">
+        <h1 class="font-h text-2xl font-bold mb-1">Dashboard</h1>
+        <p class="text-sm mb-6" style="color:#6B7060" x-text="today"></p>
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+          <template x-for="k in kpis" :key="k.l">
+            <div class="card p-4"><p class="font-h text-2xl font-bold" :style="'color:'+k.c" x-text="k.v"></p><p class="text-xs mt-0.5" style="color:#6B7060" x-text="k.l"></p></div>
+          </template>
+        </div>
+        <div class="card p-5">
+          <div class="flex items-center justify-between mb-3"><h2 class="font-h font-bold">Recente aanvragen</h2><button class="text-sm font-bold" style="color:#0B9D46" @click="view='leads';loadLeads()">Alle aanvragen →</button></div>
+          <template x-if="leads.length===0"><p class="text-sm py-6 text-center" style="color:#6B7060">Nog geen aanvragen. Zodra een bezoeker de configurator of het contactformulier gebruikt, verschijnt de aanvraag hier.</p></template>
+          <div class="divide-y" style="border-color:#E6E8DC">
+            <template x-for="l in leads.slice(0,6)" :key="l.id">
+              <div class="flex items-center gap-3 py-2.5 text-sm">
+                <span class="font-semibold flex-1 truncate" x-text="l.naam||'(geen naam)'"></span>
+                <span class="hidden sm:inline" style="color:#6B7060" x-text="l.bron"></span>
+                <span x-show="l.richtprijs" class="font-bold" x-text="euro(l.richtprijs)"></span>
+                <span class="text-[11px] px-2 py-0.5 rounded-full" style="background:#F5F7EE" x-text="fmt(l.created)"></span>
+              </div>
+            </template>
+          </div>
+        </div>
+      </section>
+
+      <!-- LEADS -->
+      <section x-show="view==='leads'">
+        <h1 class="font-h text-2xl font-bold mb-4">Aanvragen</h1>
+        <template x-if="leadsLoading"><div class="space-y-2"><template x-for="i in 5"><div class="skel h-14 rounded-xl"></div></template></div></template>
+        <template x-if="!leadsLoading && leads.length===0"><div class="card p-10 text-center"><p class="font-h font-bold mb-1">Nog geen aanvragen</p><p class="text-sm" style="color:#6B7060">Aanvragen uit de configurator en het contactformulier komen hier binnen.</p></div></template>
+        <div class="space-y-2" x-show="!leadsLoading && leads.length">
+          <template x-for="l in leads" :key="l.id">
+            <div class="card p-4">
+              <div class="flex items-start gap-3 flex-wrap">
+                <div class="flex-1 min-w-[180px]">
+                  <p class="font-h font-bold" x-text="l.naam||'(geen naam)'"></p>
+                  <p class="text-xs" style="color:#6B7060">
+                    <a :href="'mailto:'+l.email" class="hover:underline" x-text="l.email" x-show="l.email"></a>
+                    <span x-show="l.email&&l.telefoon"> · </span>
+                    <a :href="'tel:'+l.telefoon" class="hover:underline" x-text="l.telefoon" x-show="l.telefoon"></a>
+                    <span x-show="l.plaats"> · </span><span x-text="l.plaats"></span>
+                  </p>
+                </div>
+                <select class="inp !w-auto !py-1.5 text-xs" x-model="l.status" @change="updateLead(l,{status:l.status})">
+                  <template x-for="s in stages" :key="s"><option :value="s" x-text="s"></option></template>
+                </select>
+                <span class="text-[11px] px-2 py-1 rounded-full self-center" style="background:#F5F7EE" x-text="fmt(l.created)"></span>
+                <button class="btn btn-danger self-center" @click="delLead(l)">Verwijderen</button>
+              </div>
+              <div class="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs" style="color:#4b5043">
+                <span x-show="l.bron">Bron: <b x-text="l.bron"></b></span>
+                <span x-show="l.tier">Niveau: <b x-text="l.tier"></b></span>
+                <span x-show="l.tuin_w">Tuin: <b x-text="(l.tuin_w||'?')+' × '+(l.tuin_d||'?')+' m'"></b></span>
+                <span x-show="l.richtprijs">Richtprijs: <b x-text="euro(l.richtprijs)"></b></span>
+              </div>
+              <template x-if="l.ontwerp && l.ontwerp.items && l.ontwerp.items.length">
+                <div class="mt-2 pt-2 border-t text-xs" style="border-color:#E6E8DC;color:#4b5043">
+                  <span class="lbl">Ontwerp</span>
+                  <div class="flex flex-wrap gap-1.5 mt-1">
+                    <template x-for="(it,i) in l.ontwerp.items" :key="i"><span class="px-2 py-0.5 rounded-full" style="background:#E4F2E8" x-text="it"></span></template>
+                  </div>
+                </div>
+              </template>
+              <p x-show="l.note" class="mt-2 text-sm italic" style="color:#4b5043" x-text="'“'+l.note+'”'"></p>
+            </div>
+          </template>
+        </div>
+      </section>
+
+      <!-- PRODUCTS -->
+      <section x-show="view==='products'">
+        <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
+          <div><h1 class="font-h text-2xl font-bold">Producten &amp; prijzen</h1>
+            <p class="text-sm" style="color:#6B7060">Verkoopprijs = inkoop + uren × uurtarief (<span x-text="euro(uurtarief)"></span>/uur). Foto voedt de AI-impressie.</p></div>
+          <button class="btn btn-primary" @click="newProduct()">+ Nieuw product</button>
+        </div>
+        <template x-if="prodLoading"><div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3"><template x-for="i in 6"><div class="skel h-40 rounded-xl"></div></template></div></template>
+        <template x-for="cat in productCats" :key="cat">
+          <div class="mb-6" x-show="!prodLoading">
+            <h2 class="font-h font-bold text-sm uppercase tracking-wide mb-2" style="color:#087A37" x-text="cat"></h2>
+            <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              <template x-for="p in products.filter(x=>x.categorie===cat)" :key="p.id">
+                <div class="card overflow-hidden flex flex-col" :class="!p.actief&&'opacity-50'">
+                  <div class="h-28 bg-cover bg-center flex items-center justify-center" :style="p.foto?('background-image:url('+p.foto+')'):'background:#E4F2E8'">
+                    <span x-show="!p.foto" class="text-xs" style="color:#6B7060">geen foto</span>
+                  </div>
+                  <div class="p-3 flex-1 flex flex-col">
+                    <p class="font-semibold text-sm leading-tight" x-text="p.naam"></p>
+                    <p class="text-xs mt-1" style="color:#6B7060">Inkoop <span x-text="euro(p.inkoop)"></span> · <span x-text="p.uren"></span> u/<span x-text="p.eenheid"></span></p>
+                    <p class="font-h font-bold mt-1" style="color:#0B9D46"><span x-text="euro(p.prijs)"></span> <span class="text-xs font-normal" style="color:#6B7060">/<span x-text="p.eenheid"></span></span></p>
+                    <div class="flex gap-2 mt-auto pt-2">
+                      <button class="btn btn-sec !py-1 !px-2 text-xs flex-1 justify-center" @click="editProduct(p)">Bewerken</button>
+                      <button class="btn btn-danger !py-1 !px-2 text-xs" @click="delProduct(p)">×</button>
+                    </div>
+                  </div>
+                </div>
+              </template>
+            </div>
+          </div>
+        </template>
+      </section>
+
+      <!-- SETTINGS -->
+      <section x-show="view==='settings'" class="max-w-md">
+        <h1 class="font-h text-2xl font-bold mb-4">Instellingen</h1>
+        <div class="card p-5">
+          <label class="lbl">Uurtarief (voor prijsberekening)</label>
+          <div class="flex items-center gap-2 mt-1">
+            <span style="color:#6B7060">€</span>
+            <input type="number" class="inp" x-model.number="uurtarief">
+            <button class="btn btn-primary" @click="saveSettings()">Opslaan</button>
+          </div>
+          <p class="text-xs mt-2" style="color:#6B7060">De verkoopprijs per m²/m in de configurator = inkoopprijs + (uren × dit uurtarief).</p>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- PRODUCT MODAL -->
+  <div x-show="editing" x-cloak class="fixed inset-0 z-40 flex items-center justify-center p-4" style="background:rgba(15,16,9,.7)" @click="editing=null">
+    <div class="card w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto" @click.stop x-show="editing">
+      <h2 class="font-h font-bold text-lg mb-4" x-text="editing&&editing.id?'Product bewerken':'Nieuw product'"></h2>
+      <template x-if="editing">
+        <div class="space-y-3">
+          <div><label class="lbl">Categorie</label>
+            <select class="inp mt-1" x-model="editing.categorie">
+              <template x-for="c in categorien" :key="c"><option :value="c" x-text="c"></option></template>
+            </select></div>
+          <div><label class="lbl">Naam</label><input class="inp mt-1" x-model="editing.naam" placeholder="bv. Keramische tegel 60x60"></div>
+          <div class="grid grid-cols-3 gap-3">
+            <div><label class="lbl">Inkoop €</label><input type="number" step="0.01" class="inp mt-1" x-model.number="editing.inkoop"></div>
+            <div><label class="lbl">Uren p/eenh.</label><input type="number" step="0.1" class="inp mt-1" x-model.number="editing.uren"></div>
+            <div><label class="lbl">Eenheid</label><select class="inp mt-1" x-model="editing.eenheid"><option value="m2">m²</option><option value="m">m</option><option value="stuk">stuk</option></select></div>
+          </div>
+          <div class="p-3 rounded-xl flex items-center justify-between" style="background:#E4F2E8">
+            <span class="text-sm font-semibold">Verkoopprijs</span>
+            <span class="font-h font-bold" style="color:#087A37" x-text="euro((editing.inkoop||0)+(editing.uren||0)*uurtarief)+' /'+editing.eenheid"></span>
+          </div>
+          <div><label class="lbl">Foto (voor AI-impressie)</label>
+            <div class="flex items-center gap-3 mt-1">
+              <div class="w-16 h-16 rounded-lg bg-cover bg-center shrink-0" :style="editing.foto?('background-image:url('+editing.foto+')'):'background:#F5F7EE;border:1px dashed #E6E8DC'"></div>
+              <label class="btn btn-sec cursor-pointer">Upload foto<input type="file" accept="image/*" class="hidden" @change="onFoto($event)"></label>
+              <button x-show="editing.foto" class="text-xs underline" style="color:#6B7060" @click="editing.foto=null">verwijderen</button>
+            </div>
+          </div>
+          <label class="flex items-center gap-2 text-sm"><input type="checkbox" x-model="editing.actief"> Actief (zichtbaar in configurator)</label>
+          <div class="flex gap-2 pt-2">
+            <button class="btn btn-primary flex-1 justify-center" :disabled="!editing.naam||saving" @click="saveProduct()" x-text="saving?'Opslaan…':'Opslaan'"></button>
+            <button class="btn btn-sec" @click="editing=null">Annuleren</button>
+          </div>
+        </div>
+      </template>
+    </div>
+  </div>
+
+<script>
+function admin(){return{
+  authed:false, view:'dashboard', pw:'', busy:false, loginErr:'',
+  today:new Date().toLocaleDateString('nl-NL',{weekday:'long',day:'numeric',month:'long',year:'numeric'}),
+  leads:[], stages:['nieuw','contact','offerte','ingepland','gewonnen','verloren'], leadsLoading:false,
+  products:[], categorien:[], uurtarief:55, prodLoading:false, editing:null, saving:false,
+
+  async api(path,opts){ const r=await fetch(path,Object.assign({headers:{'Content-Type':'application/json'}},opts));
+    let d; try{d=await r.json()}catch{d={ok:false,error:'Serverfout ('+r.status+')'}} if(r.status===401){this.authed=false} return d; },
+  euro(n){return '€ '+Math.round(+n||0).toLocaleString('nl-NL')},
+  fmt(iso){ if(!iso)return''; const d=new Date(iso); const diff=(Date.now()-d)/1000;
+    if(diff<3600)return Math.max(1,Math.round(diff/60))+' min'; if(diff<86400)return Math.round(diff/3600)+' uur';
+    return d.toLocaleDateString('nl-NL',{day:'numeric',month:'short'}); },
+  get productCats(){ return [...new Set(this.products.map(p=>p.categorie))]; },
+  get kpis(){ const open=this.leads.filter(l=>['nieuw','contact','offerte','ingepland'].includes(l.status)).length;
+    const won=this.leads.filter(l=>l.status==='gewonnen').length;
+    const val=this.leads.filter(l=>l.status!=='verloren').reduce((s,l)=>s+(+l.richtprijs||0),0);
+    return [{l:'Aanvragen totaal',v:this.leads.length,c:'#1F2113'},{l:'Open aanvragen',v:open,c:'#0B9D46'},
+      {l:'Gewonnen',v:won,c:'#087A37'},{l:'Pipeline-waarde',v:this.euro(val),c:'#1F2113'}]; },
+
+  async init(){ const s=await this.api('/api/session'); this.authed=!!(s&&s.authed); if(this.authed){this.loadLeads();this.loadProducts();} },
+  async login(){ this.busy=true;this.loginErr=''; const d=await this.api('/api/session',{method:'POST',body:JSON.stringify({password:this.pw})});
+    this.busy=false; if(d.ok){this.authed=true;this.pw='';this.loadLeads();this.loadProducts();}else{this.loginErr=d.error||'Mislukt';} },
+  async logout(){ await this.api('/api/session',{method:'DELETE'}); this.authed=false; },
+
+  async loadLeads(){ this.leadsLoading=true; const d=await this.api('/api/leads'); this.leadsLoading=false;
+    if(d.ok){this.leads=d.leads;this.stages=d.stages||this.stages;} },
+  async updateLead(l,patch){ await this.api('/api/leads',{method:'PATCH',body:JSON.stringify(Object.assign({id:l.id},patch))}); },
+  async delLead(l){ if(!confirm('Aanvraag verwijderen?'))return; await this.api('/api/leads',{method:'DELETE',body:JSON.stringify({id:l.id})}); this.leads=this.leads.filter(x=>x.id!==l.id); },
+
+  async loadProducts(){ this.prodLoading=true; const d=await this.api('/api/products?all=1'); this.prodLoading=false;
+    if(d.ok){this.products=d.products;this.categorien=d.categorien;this.uurtarief=d.uurtarief;} },
+  newProduct(){ this.editing={categorie:this.categorien[0]||'terras',naam:'',inkoop:0,uren:0,eenheid:'m2',foto:null,actief:true}; },
+  editProduct(p){ this.editing=JSON.parse(JSON.stringify(p)); },
+  async saveProduct(){ this.saving=true; const m=this.editing.id?'PUT':'POST';
+    const d=await this.api('/api/products',{method:m,body:JSON.stringify(this.editing)}); this.saving=false;
+    if(d.ok){this.editing=null;this.loadProducts();}else{alert(d.error||'Opslaan mislukt');} },
+  async delProduct(p){ if(!confirm('“'+p.naam+'” verwijderen?'))return; await this.api('/api/products',{method:'DELETE',body:JSON.stringify({id:p.id})}); this.products=this.products.filter(x=>x.id!==p.id); },
+  onFoto(e){ const f=e.target.files[0]; if(!f)return; const img=new Image(); const rd=new FileReader();
+    rd.onload=()=>{ img.onload=()=>{ let{width:w,height:h}=img; const M=900; if(w>M||h>M){const s=M/Math.max(w,h);w=w*s|0;h=h*s|0;}
+      const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(img,0,0,w,h);
+      this.editing.foto=c.toDataURL('image/jpeg',0.82); }; img.src=rd.result; }; rd.readAsDataURL(f); },
+
+  async saveSettings(){ const d=await this.api('/api/settings',{method:'PUT',body:JSON.stringify({uurtarief:this.uurtarief})});
+    if(d.ok){this.loadProducts();alert('Opgeslagen');} },
+}}
+</script>
+</body>
+</html>
