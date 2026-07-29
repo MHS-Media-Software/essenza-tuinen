@@ -71,17 +71,40 @@ function shade(hex, f) {
   r = Math.min(255, Math.round(r * f)); g = Math.min(255, Math.round(g * f)); b = Math.min(255, Math.round(b * f));
   return `rgb(${r},${g},${b})`;
 }
+// Categorieën die als vrije vorm (m²-vlak) getekend kunnen worden.
+const SHAPE_CATS = ['terras', 'gazon', 'border', 'vlonder', 'vijver', 'zwembad'];
+function polyArea(pts) {
+  let a = 0; for (let i = 0; i < pts.length; i++) { const [x1, y1] = pts[i], [x2, y2] = pts[(i + 1) % pts.length]; a += x1 * y2 - x2 * y1; }
+  return Math.abs(a) / 2;
+}
+function polyBBox(pts) {
+  const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
+  return { x0: Math.min(...xs), y0: Math.min(...ys), x1: Math.max(...xs), y1: Math.max(...ys) };
+}
+function polyCentroid(pts) { let x = 0, y = 0; pts.forEach(p => { x += p[0]; y += p[1]; }); return [x / pts.length, y / pts.length]; }
+function pointInPoly(px, py, pts) {
+  let inside = false;
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+    const xi = pts[i][0], yi = pts[i][1], xj = pts[j][0], yj = pts[j][1];
+    if (((yi > py) !== (yj > py)) && (px < (xj - xi) * (py - yi) / (yj - yi) + xi)) inside = !inside;
+  }
+  return inside;
+}
+function itemArea(it) { return it.kind === 'shape' ? polyArea(it.points) : it.w * it.d; }
+
 function itemPrice(it, tier) {
   const def = DEF[it.type]; if (!def) return 0;
   if (def.unit === 'info') return 0;
   // Gekozen materiaal (uit de backend) bepaalt de prijs; anders de tier-schatting.
   const unitP = it.materiaal ? it.materiaal.prijs : def.prijs[tier];
+  if (it.kind === 'shape') return itemArea(it) * unitP;
   if (def.unit === 'm2') return it.w * it.d * unitP;
   if (def.unit === 'm') return Math.max(it.w, it.d) * unitP;
   return unitP;
 }
 function itemHoeveelheid(it) {
   const def = DEF[it.type];
+  if (it.kind === 'shape') return `${itemArea(it).toFixed(1)} m² (vrije vorm)`;
   if (def.unit === 'info') return 'bestaand';
   if (def.unit === 'm2') return `${(it.w * it.d).toFixed(1)} m²`;
   if (def.unit === 'm') return `${Math.max(it.w, it.d).toFixed(1)} m`;
@@ -135,9 +158,14 @@ function planToDataUrl(items, plotW, plotD, cutCfg) {
   g.fillStyle = '#86BF54'; g.fillRect(0, 0, w, h); // gazon-basis
   items.forEach(it => {
     const def = DEF[it.type];
-    const x = it.x * scale, y = it.y * scale, ew = it.w * scale, ed = it.d * scale;
-    g.fillStyle = def.color; g.fillRect(x, y, ew, ed);
-    g.lineWidth = 3; g.strokeStyle = 'rgba(0,0,0,0.55)'; g.strokeRect(x, y, ew, ed);
+    g.fillStyle = def.color; g.lineWidth = 3; g.strokeStyle = 'rgba(0,0,0,0.55)';
+    if (it.kind === 'shape') {
+      g.beginPath(); it.points.forEach((p, i) => { const px = p[0] * scale, py = p[1] * scale; i ? g.lineTo(px, py) : g.moveTo(px, py); });
+      g.closePath(); g.fill(); g.stroke();
+    } else {
+      const x = it.x * scale, y = it.y * scale, ew = it.w * scale, ed = it.d * scale;
+      g.fillRect(x, y, ew, ed); g.strokeRect(x, y, ew, ed);
+    }
   });
   const r = cutRect(plotW, plotD, cutCfg);
   if (r) { // hoekuitsparing = buiten de tuin
@@ -151,7 +179,12 @@ function planDescription(items, plotW, plotD) {
   const posH = (cx) => cx < plotW / 3 ? 'links' : cx < 2 * plotW / 3 ? 'in het midden' : 'rechts';
   const posV = (cy) => cy < plotD / 3 ? 'achterin' : cy < 2 * plotD / 3 ? 'centraal' : 'vooraan';
   return items.map(it => {
-    const def = DEF[it.type]; const cx = it.x + it.w / 2, cy = it.y + it.d / 2;
+    const def = DEF[it.type];
+    if (it.kind === 'shape') {
+      const c = polyCentroid(it.points);
+      return `- ${def.label} als organisch, vrij gevormd vlak ${posV(c[1])} ${posH(c[0])} (${polyArea(it.points).toFixed(0)} m², vloeiende gebogen randen — geen rechte hoeken)`;
+    }
+    const cx = it.x + it.w / 2, cy = it.y + it.d / 2;
     const size = def.unit === 'm2' ? `${(it.w * it.d).toFixed(0)} m²` : def.unit === 'm' ? `${Math.max(it.w, it.d).toFixed(0)} m` : '';
     return `- ${def.label} ${posV(cy)} ${posH(cx)}${size ? ` (${size})` : ''}`;
   }).join('\n');
@@ -350,6 +383,7 @@ export default function HoverniersConfigurator() {
   const [view, setView] = useState('2d');
   const [catalog, setCatalog] = useState({});   // {categorie: [product]} uit de backend
   const [past, setPast] = useState([]);          // undo-historie (JSON-snapshots)
+  const [drawCat, setDrawCat] = useState(null);  // actieve vrije-vorm categorie (pen-tool) of null
 
   useEffect(() => {
     fetch('/api/products').then(r => r.json()).then(d => {
@@ -422,11 +456,21 @@ export default function HoverniersConfigurator() {
   const delItem = (id) => { pushHist(); setItems(l => l.filter(i => i.id !== id)); setSel(s => s === id ? null : s); };
   const wisAlles = () => { if (items.length) pushHist(); setItems([]); setSel(null); };
 
+  // Vrije vorm (pen-tool): voeg een getekend, met een materiaal gevuld vlak toe.
+  const addShape = (cat, points) => {
+    if (!points || points.length < 3) return;
+    pushHist();
+    const it = { id: _uid++, kind: 'shape', type: cat, points };
+    setItems(l => [...l, it]);
+    setSel(it.id); setDrawCat(null);
+  };
+
   // Bij het wijzigen van het tuinformaat: elementen binnen de nieuwe grenzen houden
   const setPlot = (w, d) => {
     const nw = clamp(w, 3, 60), nd = clamp(d, 3, 60);
     setPlotW(nw); setPlotD(nd);
     setItems(l => l.map(it => {
+      if (it.kind === 'shape') return { ...it, points: it.points.map(p => [clamp(p[0], 0, nw), clamp(p[1], 0, nd)]) };
       const iw = Math.min(it.w, nw), id = Math.min(it.d, nd);
       return { ...it, w: iw, d: id, x: clamp(it.x, 0, nw - iw), y: clamp(it.y, 0, nd - id) };
     }));
@@ -559,6 +603,7 @@ export default function HoverniersConfigurator() {
                   <Ontwerper plotW={plotW} plotD={plotD} setPlot={setPlot} cutCfg={cutCfg} items={items} setItems={setItems} sel={sel} setSel={setSel}
                     view={view} setView={setView} addItem={addItem} delItem={delItem} wisAlles={wisAlles}
                     catalog={catalog} setMateriaal={setMateriaal} pushHist={pushHist} undo={undo} canUndo={past.length > 0}
+                    drawCat={drawCat} setDrawCat={setDrawCat} addShape={addShape}
                     tier={tier} setTier={setTier} totals={totals} adres={adres} onTerug={() => setStep(0)} onVerder={() => setStep(2)} />
                 </motion.div>
               )}
@@ -579,10 +624,11 @@ export default function HoverniersConfigurator() {
 }
 
 // ── Ontwerp-stap ─────────────────────────────────────────────────────────────
-function Ontwerper({ plotW, plotD, setPlot, cutCfg, items, setItems, sel, setSel, view, setView, addItem, delItem, wisAlles, catalog = {}, setMateriaal, pushHist, undo, canUndo, tier, setTier, totals, adres, onTerug, onVerder }) {
+function Ontwerper({ plotW, plotD, setPlot, cutCfg, items, setItems, sel, setSel, view, setView, addItem, delItem, wisAlles, catalog = {}, setMateriaal, pushHist, undo, canUndo, drawCat, setDrawCat, addShape, tier, setTier, totals, adres, onTerug, onVerder }) {
   const selItem = items.find(i => i.id === sel) || null;
   const selMats = selItem ? (catalog[selItem.type] || []) : [];
   const wrapRef = useRef(null);
+  const canvasRef = useRef(null);
   const [cw, setCw] = useState(720);
   const maxH = 520;
   const pxPerM = Math.min(cw / plotW, maxH / plotD);
@@ -591,6 +637,9 @@ function Ontwerper({ plotW, plotD, setPlot, cutCfg, items, setItems, sel, setSel
   const drag = useRef(null);
   const [ai, setAi] = useState({ open: false, phase: 'input', img: null, err: '', plan: null });
   const [photo, setPhoto] = useState(null);
+  const [penOpen, setPenOpen] = useState(false);      // materiaalkeuze-menu van de pen-tool
+  const [path, setPath] = useState([]);               // punten (in meters) tijdens het tekenen
+  const drawing = useRef(false);
 
   useEffect(() => {
     const el = wrapRef.current; if (!el) return;
@@ -606,6 +655,11 @@ function Ontwerper({ plotW, plotD, setPlot, cutCfg, items, setItems, sel, setSel
       const r = cutRect(plotW, plotD, cutCfg);
       setItems(list => list.map(it => {
         if (it.id !== d.id) return it;
+        if (d.mode === 'move-shape') {
+          const bb = polyBBox(d.opts);
+          const ddx = clamp(dx, -bb.x0, plotW - bb.x1), ddy = clamp(dy, -bb.y0, plotD - bb.y1);
+          return { ...it, points: d.opts.map(p => [p[0] + ddx, p[1] + ddy]) };
+        }
         if (d.mode === 'move') {
           let nx = clamp(d.ox + dx, 0, plotW - it.w), ny = clamp(d.oy + dy, 0, plotD - it.d);
           [nx, ny] = resolveCut(nx, ny, it.w, it.d, r, plotW, plotD);
@@ -621,12 +675,37 @@ function Ontwerper({ plotW, plotD, setPlot, cutCfg, items, setItems, sel, setSel
 
   const startMove = (e, it) => { e.stopPropagation(); setSel(it.id); pushHist && pushHist(); drag.current = { mode: 'move', id: it.id, sx: e.clientX, sy: e.clientY, ox: it.x, oy: it.y }; };
   const startResize = (e, it) => { e.stopPropagation(); setSel(it.id); pushHist && pushHist(); drag.current = { mode: 'resize', id: it.id, sx: e.clientX, sy: e.clientY, ow: it.w, oh: it.d }; };
+  const startShapeMove = (e, it) => { e.stopPropagation(); setSel(it.id); pushHist && pushHist(); drag.current = { mode: 'move-shape', id: it.id, sx: e.clientX, sy: e.clientY, opts: it.points }; };
+
+  // ── Pen-tool: vrije vorm tekenen op de plattegrond ──────────────────────────
+  const evToM = (e) => {
+    const rect = canvasRef.current.getBoundingClientRect();
+    return [clamp((e.clientX - rect.left) / pxPerM, 0, plotW), clamp((e.clientY - rect.top) / pxPerM, 0, plotD)];
+  };
+  const penDown = (e) => {
+    e.stopPropagation(); e.preventDefault();
+    drawing.current = true; setPath([evToM(e)]);
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* negeer */ }
+  };
+  const penMove = (e) => {
+    if (!drawing.current) return;
+    const p = evToM(e);
+    setPath(prev => { const last = prev[prev.length - 1]; return (last && Math.hypot(p[0] - last[0], p[1] - last[1]) < 0.3) ? prev : [...prev, p]; });
+  };
+  const penUp = () => {
+    if (!drawing.current) return;
+    drawing.current = false;
+    if (path.length >= 3 && polyArea(path) >= 0.5) addShape(drawCat, path);
+    setPath([]);
+  };
 
   // Cache: alleen opnieuw genereren als het ontwerp (of de foto) is gewijzigd.
   const renderCache = useRef({ sig: null, img: null });
   const sigOf = () => JSON.stringify({
     p: [plotW, plotD], t: tier, c: cutCfg,
-    it: items.map(i => [i.type, +i.x.toFixed(2), +i.y.toFixed(2), +i.w.toFixed(2), +i.d.toFixed(2), i.materiaal ? i.materiaal.id : 0]),
+    it: items.map(i => i.kind === 'shape'
+      ? ['shape', i.type, i.points.map(p => [+p[0].toFixed(1), +p[1].toFixed(1)]), i.materiaal ? i.materiaal.id : 0]
+      : [i.type, +i.x.toFixed(2), +i.y.toFixed(2), +i.w.toFixed(2), +i.d.toFixed(2), i.materiaal ? i.materiaal.id : 0]),
     ph: photo ? (photo.length + ':' + photo.slice(-24)) : 'none',
   });
 
@@ -713,6 +792,23 @@ function Ontwerper({ plotW, plotD, setPlot, cutCfg, items, setItems, sel, setSel
                 <DimInput value={plotD} onCommit={v => setPlot(plotW, v)} className="w-11 text-xs font-bold text-center outline-none" style={{ color: NAVY }} />
                 <span className="text-[11px]" style={{ color: MUTED }}>m</span>
               </div>
+              <div className="relative">
+                <button onClick={() => { if (drawCat) { setDrawCat(null); } else { setView('2d'); setPenOpen(o => !o); } }} title="Vrije vorm tekenen"
+                  className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-lg transition-all" style={drawCat ? { background: BLUE, color: WHITE } : { border: `1px solid ${LINE}`, color: NAVY }}>
+                  <PenTool className="w-3.5 h-3.5" /> {drawCat ? `Teken: ${DEF[drawCat].label.split(' ')[0]}` : 'Vrije vorm'}
+                </button>
+                {penOpen && !drawCat && (
+                  <div className="absolute right-0 top-full mt-1.5 z-30 w-56 rounded-xl p-2 shadow-xl" style={{ background: WHITE, border: `1px solid ${LINE}` }}>
+                    <p className="text-[10px] font-bold uppercase tracking-wider px-1 pb-1.5" style={{ color: MUTED }}>Teken een vlak als…</p>
+                    {SHAPE_CATS.map(k => { const def = DEF[k]; const Icon = def.icon; return (
+                      <button key={k} onClick={() => { setDrawCat(k); setPenOpen(false); }} className="w-full flex items-center gap-2.5 p-1.5 rounded-lg text-left transition-all hover:scale-[1.02]" style={{ background: LIGHT, marginBottom: 4 }}>
+                        <span className="w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0" style={{ background: def.color }}><Icon className="w-3.5 h-3.5 text-white" /></span>
+                        <span className="text-xs font-bold" style={{ color: NAVY }}>{def.label}</span>
+                      </button>
+                    ); })}
+                  </div>
+                )}
+              </div>
               <button onClick={() => undo && undo()} disabled={!canUndo} title="Ongedaan maken" className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-lg transition-all disabled:opacity-30" style={{ border: `1px solid ${LINE}`, color: NAVY }}><RotateCcw className="w-3.5 h-3.5" /> Ongedaan</button>
               <button onClick={() => exportPlanPDF({ items, plotW, plotD, cutCfg, tier, totals, adres })} disabled={items.length === 0} title="Opslaan als PDF / printen op schaal" className="inline-flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-lg transition-all disabled:opacity-30" style={{ border: `1px solid ${LINE}`, color: NAVY }}><Download className="w-3.5 h-3.5" /> PDF</button>
               <button onClick={openAI} disabled={items.length === 0} className="inline-flex items-center gap-1.5 text-xs font-bold px-3.5 py-2 rounded-lg text-white transition-all hover:scale-105 disabled:opacity-30" style={{ background: BLUE }}><Wand2 className="w-3.5 h-3.5" /> Breng tot leven</button>
@@ -722,10 +818,34 @@ function Ontwerper({ plotW, plotD, setPlot, cutCfg, items, setItems, sel, setSel
 
           <div ref={wrapRef} className="w-full flex justify-center overflow-hidden rounded-2xl" style={{ background: view === '2d' ? '#EEF1E6' : '#E4EBF0', minHeight: 320 }}>
             {view === '2d' ? (
-              <div className="relative my-4" onPointerDown={() => setSel(null)}
+              <div ref={canvasRef} className="relative my-4" onPointerDown={() => { if (!drawCat) setSel(null); }}
                 style={{ width: canPxW, height: canPxH, background: '#CFE0BC', border: `2px solid ${BLUE_D}`, borderRadius: 6, flexShrink: 0,
                   backgroundImage: `linear-gradient(rgba(31,33,19,0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(31,33,19,0.06) 1px, transparent 1px)`, backgroundSize: `${pxPerM}px ${pxPerM}px` }}>
+                {/* Vrije vormen (getekende vlakken) — onder de rechthoek-elementen */}
+                <svg className="absolute inset-0" width={canPxW} height={canPxH} style={{ zIndex: 0, pointerEvents: 'none' }}>
+                  {items.filter(it => it.kind === 'shape').map(it => {
+                    const def = DEF[it.type]; const on = sel === it.id; const pts = it.points.map(p => `${p[0] * pxPerM},${p[1] * pxPerM}`).join(' ');
+                    return <polygon key={it.id} points={pts} fill={def.color} fillOpacity="0.9" stroke={on ? NAVY : 'rgba(0,0,0,0.3)'} strokeWidth={on ? 2.5 : 1.5} strokeLinejoin="round"
+                      style={{ cursor: 'move', pointerEvents: drawCat ? 'none' : 'auto' }} onPointerDown={(e) => startShapeMove(e, it)} />;
+                  })}
+                </svg>
+                {/* Label + verwijderknop voor de geselecteerde vrije vorm */}
+                {(() => {
+                  const s = selItem; if (!s || s.kind !== 'shape') return null;
+                  const c = polyCentroid(s.points), bb = polyBBox(s.points); const Icon = DEF[s.type].icon;
+                  return (
+                    <div key="shapesel" className="absolute" style={{ left: 0, top: 0, zIndex: 6, pointerEvents: 'none' }}>
+                      <div className="absolute flex flex-col items-center gap-0.5" style={{ left: c[0] * pxPerM, top: c[1] * pxPerM, transform: 'translate(-50%,-50%)' }}>
+                        <Icon className="w-4 h-4 text-white" style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.6))' }} />
+                        <span className="text-[9px] font-bold text-white leading-tight" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.7)' }}>{DEF[s.type].label.split(' ')[0]} · {itemArea(s).toFixed(0)}m²</span>
+                      </div>
+                      <button onPointerDown={(e) => { e.stopPropagation(); delItem(s.id); }} className="absolute w-6 h-6 rounded-full flex items-center justify-center shadow"
+                        style={{ left: bb.x1 * pxPerM, top: bb.y0 * pxPerM, transform: 'translate(-50%,-50%)', background: '#C0392B', color: WHITE, pointerEvents: 'auto' }}><Trash2 className="w-3 h-3" /></button>
+                    </div>
+                  );
+                })()}
                 {items.map(it => {
+                  if (it.kind === 'shape') return null;
                   const def = DEF[it.type]; const on = sel === it.id; const Icon = def.icon; const p = pat2d(def);
                   return (
                     <div key={it.id} onPointerDown={(e) => startMove(e, it)} className="absolute select-none touch-none flex flex-col items-center justify-center gap-0.5"
@@ -749,7 +869,22 @@ function Ontwerper({ plotW, plotD, setPlot, cutCfg, items, setItems, sel, setSel
                     <span className="text-[9px] font-bold text-white text-center px-1" style={{ textShadow: '0 1px 2px rgba(0,0,0,0.7)' }}>Buiten de tuin</span>
                   </div>
                 ); })()}
-                {items.length === 0 && <div className="absolute inset-0 flex items-center justify-center pointer-events-none"><p className="text-sm font-semibold px-4 text-center" style={{ color: 'rgba(31,33,19,0.4)' }}>Klik links op een element om het toe te voegen, sleep en pas de maat aan.</p></div>}
+                {items.length === 0 && !drawCat && <div className="absolute inset-0 flex items-center justify-center pointer-events-none"><p className="text-sm font-semibold px-4 text-center" style={{ color: 'rgba(31,33,19,0.4)' }}>Klik links op een element om het toe te voegen, sleep en pas de maat aan.</p></div>}
+                {/* Teken-overlay: vang alle pointers zolang de pen-tool actief is */}
+                {drawCat && (
+                  <div className="absolute inset-0" style={{ zIndex: 40, cursor: 'crosshair', touchAction: 'none' }}
+                    onPointerDown={penDown} onPointerMove={penMove} onPointerUp={penUp} onPointerCancel={penUp}>
+                    <svg className="absolute inset-0" width={canPxW} height={canPxH} style={{ pointerEvents: 'none' }}>
+                      {path.length > 1 && <polygon points={path.map(p => `${p[0] * pxPerM},${p[1] * pxPerM}`).join(' ')} fill={DEF[drawCat].color} fillOpacity="0.35" stroke={DEF[drawCat].color} strokeWidth="2" strokeLinejoin="round" strokeDasharray="5 4" />}
+                      {path.map((p, i) => <circle key={i} cx={p[0] * pxPerM} cy={p[1] * pxPerM} r="2.5" fill={BLUE_D} />)}
+                    </svg>
+                    {path.length === 0 && (
+                      <div className="absolute inset-x-0 top-3 flex justify-center pointer-events-none">
+                        <span className="px-3 py-1.5 rounded-full text-[11px] font-bold text-white shadow" style={{ background: 'rgba(11,29,58,0.9)' }}>Teken een vlak — houd ingedrukt en sleep. Laat los om te sluiten.</span>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             ) : (
               <IsoView items={items} plotW={plotW} plotD={plotD} width={canPxW} cutCfg={cutCfg} />
@@ -763,7 +898,7 @@ function Ontwerper({ plotW, plotD, setPlot, cutCfg, items, setItems, sel, setSel
                 <span className="text-[11px]" style={{ color: MUTED }}>· elk vakje = 1 × 1 m</span>
               </div>
             )}
-            <p className="text-[11px]" style={{ color: MUTED }}>Klik een element aan om te verplaatsen, de maat te wijzigen (hoekje) of een materiaal te kiezen.</p>
+            <p className="text-[11px]" style={{ color: MUTED }}>Klik een element aan om te verplaatsen, de maat te wijzigen (hoekje) of een materiaal te kiezen. Met <b>Vrije vorm</b> teken je een organische border, gazon of vijver.</p>
           </div>
         </div>
 
@@ -898,12 +1033,46 @@ function IsoView({ items, plotW, plotD, width, cutCfg }) {
   const grondPoly = lPolygon(plotW, plotD, cutCfg);
   const pts = [];
   grondPoly.forEach(c => pts.push(proj(c[0], c[1], 0)));
-  items.forEach(it => { const def = DEF[it.type]; const cx = it.x + it.w / 2, cy = it.y + it.d / 2; pts.push(proj(it.x, it.y, 0), proj(it.x + it.w, it.y + it.d, 0), proj(cx, cy, def.hz + (def.key === 'tuinhuis' || def.key === 'gebouw' ? 0.9 : 0))); });
+  items.forEach(it => {
+    if (it.kind === 'shape') { it.points.forEach(p => pts.push(proj(p[0], p[1], 0), proj(p[0], p[1], 0.5))); return; }
+    const def = DEF[it.type]; const cx = it.x + it.w / 2, cy = it.y + it.d / 2; pts.push(proj(it.x, it.y, 0), proj(it.x + it.w, it.y + it.d, 0), proj(cx, cy, def.hz + (def.key === 'tuinhuis' || def.key === 'gebouw' ? 0.9 : 0)));
+  });
   const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
   const pad = 34;
   const minX = Math.min(...xs) - pad, maxX = Math.max(...xs) + pad, minY = Math.min(...ys) - pad, maxY = Math.max(...ys) + pad;
 
+  const drawShape = (it, k) => {
+    const def = DEF[it.type]; const col = def.color; const els = []; let ki = 0; const key = () => `${k}-s-${ki++}`;
+    const isWater = def.key === 'vijver' || def.key === 'zwembad';
+    const zTop = def.key === 'vlonder' ? 0.24 : def.key === 'terras' ? 0.12 : def.key === 'border' ? 0.12 : isWater ? 0 : 0.05;
+    const bottom = it.points.map(p => proj(p[0], p[1], 0));
+    const top = it.points.map(p => proj(p[0], p[1], zTop));
+    if (zTop > 0) els.push(<polygon key={key()} points={P(bottom)} fill={shade(col, 0.68)} />); // zijkant / dikte
+    els.push(<polygon key={key()} points={P(top)} fill={isWater ? '#AEB6A0' : col} stroke={shade(col, 0.72)} strokeWidth="0.6" strokeLinejoin="round" />);
+    if (isWater) {
+      const c = polyCentroid(it.points), bb = polyBBox(it.points); const m = Math.min(0.4, (bb.x1 - bb.x0) / 5, (bb.y1 - bb.y0) / 5);
+      const inner = it.points.map(p => proj(c[0] + (p[0] - c[0]) * (1 - m / Math.max(0.5, Math.hypot(p[0] - c[0], p[1] - c[1]))), c[1] + (p[1] - c[1]) * (1 - m / Math.max(0.5, Math.hypot(p[0] - c[0], p[1] - c[1]))), 0));
+      els.push(<polygon key={key()} points={P(inner)} fill={col} />);
+      els.push(<polygon key={key()} points={P(inner)} fill="rgba(255,255,255,0.14)" />);
+    }
+    if (def.key === 'border') { // beplanting: struiken binnen de vorm
+      const bb = polyBBox(it.points); const greens = ['#3E7D34', '#4E8F3F', '#356E2C'], flowers = ['#D98FB0', '#E7C44B', '#C96A6A'];
+      const bushes = []; let c = 0;
+      for (let gx = bb.x0 + 0.4; gx < bb.x1; gx += 0.8) for (let gy = bb.y0 + 0.4; gy < bb.y1; gy += 0.8) { if (pointInPoly(gx, gy, it.points)) bushes.push({ cx: gx, cy: gy, c: c++ }); }
+      bushes.sort((a, b) => (a.cx + a.cy) - (b.cx + b.cy));
+      bushes.forEach(({ cx, cy, c }) => {
+        const g0 = proj(cx, cy, 0), p = proj(cx, cy, 0.4), r = s * 0.42;
+        els.push(<ellipse key={key()} cx={g0[0]} cy={g0[1]} rx={r * 1.1} ry={r * 0.5} fill="rgba(0,0,0,0.08)" />);
+        els.push(<circle key={key()} cx={p[0]} cy={p[1]} r={r} fill={greens[c % 3]} />);
+        els.push(<circle key={key()} cx={p[0] - r * 0.32} cy={p[1] - r * 0.3} r={r * 0.5} fill={shade(greens[c % 3], 1.28)} />);
+        if (c % 2 === 0) els.push(<circle key={key()} cx={p[0] + r * 0.25} cy={p[1] - r * 0.1} r={r * 0.2} fill={flowers[c % 3]} />);
+      });
+    }
+    return <g key={k}>{els}</g>;
+  };
+
   const drawItem = (it, k) => {
+    if (it.kind === 'shape') return drawShape(it, k);
     const def = DEF[it.type]; const { x, y, w, d } = it; const col = def.color; const els = []; let ki = 0;
     const key = () => `${k}-${ki++}`;
     const poly = (arr, fill, stroke, sw) => els.push(<polygon key={key()} points={P(arr)} fill={fill} stroke={stroke || 'none'} strokeWidth={sw || 0} />);
@@ -981,7 +1150,8 @@ function IsoView({ items, plotW, plotD, width, cutCfg }) {
 
   const grond = grondPoly.map(c => proj(c[0], c[1], 0));
   const cr = cutRect(plotW, plotD, cutCfg);
-  const sorted = [...items].sort((a, b) => ((a.x + a.w / 2) + (a.y + a.d / 2)) - ((b.x + b.w / 2) + (b.y + b.d / 2)));
+  const depthKey = (it) => { if (it.kind === 'shape') { const c = polyCentroid(it.points); return c[0] + c[1]; } return (it.x + it.w / 2) + (it.y + it.d / 2); };
+  const sorted = [...items].sort((a, b) => depthKey(a) - depthKey(b));
 
   return (
     <svg viewBox={`${minX} ${minY} ${maxX - minX} ${maxY - minY}`} className="my-4" style={{ width: '100%', maxWidth: Math.min(width + 140, 780), height: 'auto' }}>
