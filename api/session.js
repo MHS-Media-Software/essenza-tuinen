@@ -1,7 +1,7 @@
 // Admin login/logout/status. POST {password} -> cookie; GET -> {authed}; DELETE -> logout.
-const db = require('./_db');
+import * as db from './_db.js';
 
-module.exports = async (req, res) => {
+export default async function handler(req, res) {
   try {
     if (req.method === 'GET') {
       return res.status(200).json({ ok: true, authed: db.isAdmin(req) });

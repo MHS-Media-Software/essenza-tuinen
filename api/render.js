@@ -4,7 +4,7 @@
 // - photoDataUrl : (optioneel) foto van de huidige tuin — het ontwerp wordt hierin verwerkt
 // - prompt       : de tekstinstructie (client bouwt deze incl. indelingsbeschrijving)
 // Sleutel staat in env OPENROUTER_API_KEY.
-module.exports = async (req, res) => {
+export default async function handler(req, res) {
   if (req.method !== 'POST') { res.status(405).json({ ok: false, error: 'method' }); return; }
   const key = process.env.OPENROUTER_API_KEY;
   if (!key) { res.status(500).json({ ok: false, error: 'geen sleutel geconfigureerd' }); return; }

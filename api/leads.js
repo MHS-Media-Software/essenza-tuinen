@@ -1,9 +1,9 @@
 // Aanvragen/leads. POST publiek (configurator + contactformulier). GET/PATCH admin.
-const db = require('./_db');
+import * as db from './_db.js';
 
 const STAGES = ['nieuw', 'contact', 'offerte', 'ingepland', 'gewonnen', 'verloren'];
 
-module.exports = async (req, res) => {
+export default async function handler(req, res) {
   try {
     await db.ensureSchema();
 

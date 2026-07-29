@@ -1,7 +1,7 @@
 // Producten / materialen per categorie. Prijs per eenheid = inkoop + uren * uurtarief.
 // GET (publiek: actieve producten; ?all=1 admin: incl. inactief)
 // POST/PUT/DELETE: admin. Bij lege tabel wordt een set voorbeeldmaterialen geseed.
-const db = require('./_db');
+import * as db from './_db.js';
 
 const CATS = ['tuinontwerp', 'tuinaanleg', 'terras', 'gazon', 'border', 'houtbouw', 'vlonder', 'schutting', 'pergola', 'watermanagement', 'vijver', 'zwembad', 'tuinonderhoud', 'boomverzorging', 'boom', 'tuinhuis'];
 
@@ -41,7 +41,7 @@ function withPrijs(p, uurtarief) {
   return { ...p, actief: !!p.actief, prijs };
 }
 
-module.exports = async (req, res) => {
+export default async function handler(req, res) {
   try {
     await db.ensureSchema();
     const uurtarief = Number(await db.getSetting('uurtarief', 55)) || 55;

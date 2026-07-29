@@ -1,7 +1,7 @@
 // Instellingen (o.a. uurtarief voor de prijsberekening). GET admin, PUT admin.
-const db = require('./_db');
+import * as db from './_db.js';
 
-module.exports = async (req, res) => {
+export default async function handler(req, res) {
   try {
     await db.ensureSchema();
     if (!db.requireAdmin(req, res)) return;

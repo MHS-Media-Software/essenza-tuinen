@@ -1,6 +1,6 @@
 // Gedeelde datalaag (Turso / libSQL via HTTP pipeline) + admin-auth helpers.
 // Geen npm-deps: pure fetch + node:crypto. CommonJS zodat het werkt zonder package.json.
-const crypto = require('crypto');
+import crypto from 'node:crypto';
 
 const RAW_URL = process.env.TURSO_DATABASE_URL || '';
 const TOKEN = process.env.TURSO_AUTH_TOKEN || '';
@@ -126,4 +126,4 @@ async function readBody(req) {
   });
 }
 
-module.exports = { run, q, exec, ensureSchema, getSetting, setSetting, isAdmin, requireAdmin, setAuthCookie, clearAuthCookie, readBody, COOKIE };
+export { run, q, exec, ensureSchema, getSetting, setSetting, isAdmin, requireAdmin, setAuthCookie, clearAuthCookie, readBody, COOKIE };
