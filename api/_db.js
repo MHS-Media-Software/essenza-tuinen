@@ -67,6 +67,8 @@ function ensureSchema() {
     { sql: `CREATE TABLE IF NOT EXISTS designs (
       id INTEGER PRIMARY KEY AUTOINCREMENT, token TEXT UNIQUE, created TEXT, updated TEXT,
       naam TEXT, email TEXT, data TEXT )` },
+    { sql: `CREATE TABLE IF NOT EXISTS customers (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT UNIQUE, pass_hash TEXT, naam TEXT, created TEXT )` },
     { sql: `CREATE TABLE IF NOT EXISTS settings ( key TEXT PRIMARY KEY, value TEXT )` },
   ]).catch(e => { _schemaReady = null; throw e; });
   return _schemaReady;
@@ -117,6 +119,42 @@ function requireAdmin(req, res) {
   return false;
 }
 
+// ── Wachtwoord-hashing (klantaccounts) ───────────────────────────────────────
+function hashPw(pw) {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const h = crypto.pbkdf2Sync(String(pw), salt, 120000, 32, 'sha256').toString('hex');
+  return `${salt}$${h}`;
+}
+function verifyPw(pw, stored) {
+  if (!stored || stored.indexOf('$') < 0) return false;
+  const [salt, h] = stored.split('$');
+  const cand = crypto.pbkdf2Sync(String(pw), salt, 120000, 32, 'sha256').toString('hex');
+  try { return crypto.timingSafeEqual(Buffer.from(cand, 'hex'), Buffer.from(h, 'hex')); } catch { return false; }
+}
+
+// ── Klant-sessie (aparte cookie van de admin) ────────────────────────────────
+const CUST_COOKIE = 'et_klant';
+function signCustomer(email) {
+  const payload = b64u(JSON.stringify({ r: 'klant', email, exp: Date.now() + 30 * 864e5 }));
+  const sig = b64u(crypto.createHmac('sha256', SECRET).update(payload).digest());
+  return `${payload}.${sig}`;
+}
+function verifyCustomer(tok) {
+  if (!tok || tok.indexOf('.') < 0) return null;
+  const [payload, sig] = tok.split('.');
+  const exp = b64u(crypto.createHmac('sha256', SECRET).update(payload).digest());
+  if (sig !== exp) return null;
+  try { const p = JSON.parse(Buffer.from(payload.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString()); return (p.r === 'klant' && p.exp > Date.now()) ? p.email : null; }
+  catch { return null; }
+}
+function customerEmail(req) { return verifyCustomer(readCookie(req, CUST_COOKIE)); }
+function setCustomerCookie(res, email) {
+  res.setHeader('Set-Cookie', `${CUST_COOKIE}=${signCustomer(email)}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${30 * 86400}`);
+}
+function clearCustomerCookie(res) {
+  res.setHeader('Set-Cookie', `${CUST_COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`);
+}
+
 // Body-parser (Vercel parseert JSON meestal al, maar wees defensief)
 async function readBody(req) {
   if (req.body && typeof req.body === 'object') return req.body;
@@ -126,4 +164,5 @@ async function readBody(req) {
   });
 }
 
-export { run, q, exec, ensureSchema, getSetting, setSetting, isAdmin, requireAdmin, setAuthCookie, clearAuthCookie, readBody, COOKIE };
+export { run, q, exec, ensureSchema, getSetting, setSetting, isAdmin, requireAdmin, setAuthCookie, clearAuthCookie, readBody, COOKIE,
+  hashPw, verifyPw, customerEmail, setCustomerCookie, clearCustomerCookie };

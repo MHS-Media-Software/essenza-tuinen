@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  ArrowUpRight, ArrowRight, Search, Trash2, RotateCcw, Map as MapIcon, Box, Wand2, Upload, Download,
+  ArrowUpRight, ArrowRight, Search, Trash2, RotateCcw, Map as MapIcon, Box, Wand2, Upload, Download, Save, User as UserIcon, LogIn, Copy, FolderOpen,
   CheckCircle, Check, Plus, Phone, MapPin, Info, Sparkles, X,
   Grid2x2, Sprout, Flower2, Rows3, Waves, Droplets, Fence, Columns3, TreePine, Warehouse, Building2, Square, PenTool,
 } from 'lucide-react';
@@ -225,6 +225,112 @@ function exportPlanPDF({ items, plotW, plotD, cutCfg, tier, totals, adres }) {
   w.document.close();
 }
 
+// ── Opslaan + klantaccount modal (account niet verplicht) ────────────────────
+function SaveAccountModal({ open, onClose, account, designToken, onSave, onAuth }) {
+  const [mode, setMode] = useState('choose'); // choose | register | login | done
+  const [email, setEmail] = useState(''); const [pw, setPw] = useState('');
+  const [busy, setBusy] = useState(false); const [err, setErr] = useState(''); const [link, setLink] = useState(''); const [copied, setCopied] = useState(false);
+  useEffect(() => { if (open) { setMode('choose'); setErr(''); setLink(''); setPw(''); setCopied(false); } }, [open]);
+  if (!open) return null;
+  const finish = (token) => { setLink(`${window.location.origin}${BASE}/configurator?d=${token}`); setMode('done'); };
+  const doSave = async (withEmail) => { setBusy(true); setErr(''); try { const t = await onSave(withEmail); finish(t); } catch (e) { setErr(e.message || 'Mislukt'); } setBusy(false); };
+  const doAuthSave = async (action) => {
+    setBusy(true); setErr('');
+    try { await onAuth(action, email.trim().toLowerCase(), pw); const t = await onSave(); finish(t); }
+    catch (e) { setErr(e.message || 'Mislukt'); } setBusy(false);
+  };
+  const inp = 'w-full px-4 py-3 text-sm rounded-xl border outline-none';
+  const inpStyle = { borderColor: LINE, background: WHITE, color: INK };
+  return (
+    <div className="fixed inset-0 z-[90] flex items-center justify-center p-4" style={{ background: 'rgba(15,16,9,0.75)', backdropFilter: 'blur(4px)' }} onClick={onClose}>
+      <div className="w-full max-w-md rounded-3xl overflow-hidden" style={{ background: WHITE, fontFamily: FONT_B, maxHeight: '90vh' }} onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between gap-4 p-5 border-b" style={{ borderColor: LINE }}>
+          <div className="flex items-center gap-2.5"><div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: SOFT }}><Save className="w-4 h-4" style={{ color: BLUE }} /></div>
+            <p className="font-semibold" style={{ fontFamily: FONT_H, color: NAVY }}>Ontwerp bewaren</p></div>
+          <button onClick={onClose} className="w-9 h-9 rounded-full flex items-center justify-center" style={{ background: LIGHT, color: NAVY }}><X className="w-4 h-4" /></button>
+        </div>
+        <div className="p-5 overflow-y-auto">
+          {mode === 'done' && (
+            <div>
+              <div className="flex items-center gap-2 mb-3"><CheckCircle className="w-5 h-5" style={{ color: BLUE }} /><p className="font-semibold" style={{ color: NAVY }}>Uw ontwerp is bewaard{account.authed ? ' in uw account' : ''}.</p></div>
+              <p className="text-xs mb-2" style={{ color: MUTED }}>Bewaar deze link om later verder te werken:</p>
+              <div className="flex gap-2 mb-4">
+                <input readOnly value={link} className={inp} style={{ ...inpStyle, fontSize: 12 }} onFocus={e => e.target.select()} />
+                <button onClick={() => { navigator.clipboard?.writeText(link); setCopied(true); }} className="px-3 rounded-xl flex items-center gap-1.5 text-xs font-bold flex-shrink-0" style={{ background: SOFT, color: BLUE_D }}><Copy className="w-3.5 h-3.5" /> {copied ? 'Gekopieerd' : 'Kopieer'}</button>
+              </div>
+              {!account.authed && <p className="text-[12px] mb-3" style={{ color: MUTED }}>Tip: maak een account aan zodat u niet afhankelijk bent van deze link. U kunt dan altijd inloggen en verder werken.</p>}
+              <button onClick={onClose} className="w-full py-3 text-sm font-bold rounded-xl text-white" style={{ background: BLUE }}>Klaar</button>
+            </div>
+          )}
+          {mode !== 'done' && account.authed && (
+            <div>
+              <p className="text-sm mb-4" style={{ color: MUTED }}>Opslaan in uw account <b style={{ color: NAVY }}>{account.email}</b>. U kunt later inloggen en verder werken.</p>
+              {err && <p className="text-xs mb-3" style={{ color: '#C0392B' }}>{err}</p>}
+              <button onClick={() => doSave()} disabled={busy} className="w-full py-3.5 text-sm font-bold rounded-xl text-white disabled:opacity-50" style={{ background: BLUE }}>{busy ? 'Opslaan…' : 'Opslaan in mijn account'}</button>
+            </div>
+          )}
+          {mode === 'choose' && !account.authed && (
+            <div>
+              <p className="text-sm mb-4" style={{ color: MUTED }}>Bewaar uw ontwerp zodat u er later mee verder kunt. Maak een account aan, of bewaar met een link.</p>
+              <button onClick={() => setMode('register')} className="w-full flex items-center gap-3 p-3.5 rounded-xl mb-2 text-left" style={{ border: `1px solid ${BLUE}`, background: SOFT }}>
+                <UserIcon className="w-5 h-5" style={{ color: BLUE }} /><span><span className="block text-sm font-bold" style={{ color: NAVY }}>Account aanmaken</span><span className="block text-[11px]" style={{ color: MUTED }}>Altijd terug te vinden, ook op een ander apparaat</span></span></button>
+              <button onClick={() => setMode('login')} className="w-full flex items-center gap-3 p-3.5 rounded-xl mb-2 text-left" style={{ border: `1px solid ${LINE}` }}>
+                <LogIn className="w-5 h-5" style={{ color: MUTED }} /><span><span className="block text-sm font-bold" style={{ color: NAVY }}>Ik heb al een account</span><span className="block text-[11px]" style={{ color: MUTED }}>Inloggen en opslaan</span></span></button>
+              <button onClick={() => doSave()} disabled={busy} className="w-full flex items-center gap-3 p-3.5 rounded-xl text-left disabled:opacity-50" style={{ border: `1px solid ${LINE}` }}>
+                <Save className="w-5 h-5" style={{ color: MUTED }} /><span><span className="block text-sm font-bold" style={{ color: NAVY }}>{busy ? 'Opslaan…' : 'Alleen bewaren met een link'}</span><span className="block text-[11px]" style={{ color: MUTED }}>Geen account, u krijgt een terugkeer-link</span></span></button>
+              {err && <p className="text-xs mt-3" style={{ color: '#C0392B' }}>{err}</p>}
+            </div>
+          )}
+          {(mode === 'register' || mode === 'login') && !account.authed && (
+            <div>
+              <p className="text-sm mb-4" style={{ color: MUTED }}>{mode === 'register' ? 'Maak een account aan met uw e-mailadres en een wachtwoord.' : 'Log in met uw e-mailadres en wachtwoord.'}</p>
+              <input type="email" placeholder="E-mailadres" value={email} onChange={e => setEmail(e.target.value)} className={inp + ' mb-2'} style={inpStyle} />
+              <input type="password" placeholder="Wachtwoord (min. 6 tekens)" value={pw} onChange={e => setPw(e.target.value)} className={inp + ' mb-3'} style={inpStyle} />
+              {err && <p className="text-xs mb-3" style={{ color: '#C0392B' }}>{err}</p>}
+              <button onClick={() => doAuthSave(mode === 'register' ? 'register' : 'login')} disabled={busy || !email || pw.length < 6} className="w-full py-3.5 text-sm font-bold rounded-xl text-white disabled:opacity-40 mb-2" style={{ background: BLUE }}>
+                {busy ? 'Bezig…' : (mode === 'register' ? 'Account aanmaken & opslaan' : 'Inloggen & opslaan')}</button>
+              <button onClick={() => setMode('choose')} className="w-full py-2 text-xs font-semibold" style={{ color: MUTED }}>← Terug</button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── "Mijn ontwerpen" modal (voor ingelogde klant) ────────────────────────────
+function MineModal({ open, onClose, onOpenDesign }) {
+  const [list, setList] = useState(null);
+  useEffect(() => { if (open) { setList(null); fetch('/api/designs?mine=1').then(r => r.json()).then(d => setList(d.ok ? d.designs : [])).catch(() => setList([])); } }, [open]);
+  if (!open) return null;
+  const openOne = async (token) => { const d = await (await fetch('/api/designs?token=' + encodeURIComponent(token))).json(); if (d.ok && d.design) { onOpenDesign(d.design.data, token); onClose(); } };
+  const del = async (token) => { await fetch('/api/designs', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token }) }); setList(l => l.filter(x => x.token !== token)); };
+  return (
+    <div className="fixed inset-0 z-[90] flex items-center justify-center p-4" style={{ background: 'rgba(15,16,9,0.75)', backdropFilter: 'blur(4px)' }} onClick={onClose}>
+      <div className="w-full max-w-md rounded-3xl overflow-hidden" style={{ background: WHITE, fontFamily: FONT_B, maxHeight: '90vh' }} onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between gap-4 p-5 border-b" style={{ borderColor: LINE }}>
+          <p className="font-semibold" style={{ fontFamily: FONT_H, color: NAVY }}>Mijn ontwerpen</p>
+          <button onClick={onClose} className="w-9 h-9 rounded-full flex items-center justify-center" style={{ background: LIGHT, color: NAVY }}><X className="w-4 h-4" /></button>
+        </div>
+        <div className="p-5 overflow-y-auto">
+          {list === null && <p className="text-sm py-6 text-center" style={{ color: MUTED }}>Laden…</p>}
+          {list && list.length === 0 && <p className="text-sm py-8 text-center" style={{ color: MUTED }}>U heeft nog geen opgeslagen ontwerpen.</p>}
+          <div className="space-y-2">
+            {list && list.map(d => (
+              <div key={d.token} className="flex items-center gap-3 p-3 rounded-xl" style={{ border: `1px solid ${LINE}` }}>
+                <FolderOpen className="w-5 h-5 flex-shrink-0" style={{ color: BLUE }} />
+                <div className="flex-1 min-w-0"><p className="text-sm font-bold truncate" style={{ color: NAVY }}>{d.naam || 'Tuinontwerp'}</p><p className="text-[11px]" style={{ color: MUTED }}>{new Date(d.updated).toLocaleDateString('nl-NL', { day: 'numeric', month: 'short', year: 'numeric' })}</p></div>
+                <button onClick={() => openOne(d.token)} className="text-xs font-bold px-3 py-1.5 rounded-lg text-white" style={{ background: BLUE }}>Openen</button>
+                <button onClick={() => del(d.token)} className="text-xs font-bold px-2 py-1.5 rounded-lg" style={{ color: '#C0392B' }}><Trash2 className="w-3.5 h-3.5" /></button>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 let _uid = 1;
 
 export default function HoverniersConfigurator() {
@@ -253,6 +359,34 @@ export default function HoverniersConfigurator() {
   const pushHist = () => setPast(p => [...p.slice(-49), JSON.stringify(items)]);
   const undo = () => setPast(p => { if (!p.length) return p; setItems(JSON.parse(p[p.length - 1])); setSel(null); return p.slice(0, -1); });
   const setMateriaal = (id, mat) => { pushHist(); setItems(l => l.map(it => it.id === id ? { ...it, materiaal: mat } : it)); };
+
+  // ── Klantaccount + ontwerp opslaan/laden ──────────────────────────────────
+  const [account, setAccount] = useState({ authed: false, email: null });
+  const [designToken, setDesignToken] = useState(null);
+  const [saveModal, setSaveModal] = useState(false);
+  const [mineModal, setMineModal] = useState(false);
+
+  const applyDesign = (data, token) => {
+    if (data.items) { setItems(data.items); _uid = data.items.reduce((m, i) => Math.max(m, i.id || 0), 0) + 1; }
+    if (data.plotW) setPlotW(data.plotW); if (data.plotD) setPlotD(data.plotD);
+    setCutCfg(data.cutCfg || null); if (data.tier) setTier(data.tier); if (data.adres) setAdres(data.adres);
+    setDesignToken(token || null); setStep(1);
+  };
+  useEffect(() => {
+    fetch('/api/account').then(r => r.json()).then(d => { if (d && d.ok) setAccount({ authed: !!d.authed, email: d.email }); }).catch(() => {});
+    const t = new URLSearchParams(window.location.search).get('d');
+    if (t) fetch('/api/designs?token=' + encodeURIComponent(t)).then(r => r.json()).then(d => { if (d && d.ok && d.design && d.design.data) applyDesign(d.design.data, t); }).catch(() => {});
+  }, []);
+  const saveDesign = async (email) => {
+    const body = { token: designToken || undefined, data: { items, plotW, plotD, cutCfg, tier, adres }, naam: adres?.naam || 'Mijn tuinontwerp', email };
+    const d = await (await fetch('/api/designs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })).json();
+    if (d && d.ok) { setDesignToken(d.token); return d.token; } throw new Error(d && d.error || 'Opslaan mislukt');
+  };
+  const doAuth = async (action, email, password) => {
+    const d = await (await fetch('/api/account', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, email, password }) })).json();
+    if (d && d.ok) { setAccount({ authed: true, email: d.email }); return d.email; } throw new Error(d && d.error || 'Mislukt');
+  };
+  const logout = async () => { await fetch('/api/account', { method: 'DELETE' }); setAccount({ authed: false, email: null }); };
 
   const stappen = ['Uw kavel', 'Ontwerp', 'Offerte'];
 
@@ -406,6 +540,22 @@ export default function HoverniersConfigurator() {
 
               {step === 1 && (
                 <motion.div key="ontwerp" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.25 }}>
+                  {/* Account + opslaan-balk */}
+                  <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
+                    <div className="flex items-center gap-2 text-sm">
+                      {account.authed ? (
+                        <>
+                          <span style={{ color: MUTED }}>Ingelogd als <b style={{ color: NAVY }}>{account.email}</b></span>
+                          <button onClick={() => setMineModal(true)} className="font-bold" style={{ color: BLUE }}>Mijn ontwerpen</button>
+                          <span style={{ color: LINE }}>·</span>
+                          <button onClick={logout} className="font-semibold" style={{ color: MUTED }}>Uitloggen</button>
+                        </>
+                      ) : (
+                        <button onClick={() => setSaveModal(true)} className="font-bold inline-flex items-center gap-1.5" style={{ color: BLUE }}><UserIcon className="w-4 h-4" /> Inloggen / account aanmaken</button>
+                      )}
+                    </div>
+                    <button onClick={() => setSaveModal(true)} disabled={items.length === 0} className="inline-flex items-center gap-2 text-sm font-bold px-5 py-2.5 rounded-xl transition-all disabled:opacity-30" style={{ background: SOFT, color: BLUE_D }}><Save className="w-4 h-4" /> Ontwerp opslaan{designToken ? ' (opgeslagen)' : ''}</button>
+                  </div>
                   <Ontwerper plotW={plotW} plotD={plotD} setPlot={setPlot} cutCfg={cutCfg} items={items} setItems={setItems} sel={sel} setSel={setSel}
                     view={view} setView={setView} addItem={addItem} delItem={delItem} wisAlles={wisAlles}
                     catalog={catalog} setMateriaal={setMateriaal} pushHist={pushHist} undo={undo} canUndo={past.length > 0}
@@ -422,6 +572,8 @@ export default function HoverniersConfigurator() {
           </div>
         </section>
       </div>
+      <SaveAccountModal open={saveModal} onClose={() => setSaveModal(false)} account={account} designToken={designToken} onSave={saveDesign} onAuth={doAuth} />
+      <MineModal open={mineModal} onClose={() => setMineModal(false)} onOpenDesign={applyDesign} />
     </Layout>
   );
 }
