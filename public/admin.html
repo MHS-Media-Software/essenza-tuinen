@@ -21,7 +21,7 @@
     .font-h{font-family:'Poppins',sans-serif}
     [x-cloak]{display:none!important}
     .card{background:#fff;border:1px solid #E6E8DC;border-radius:1rem}
-    .btn{display:inline-flex;align-items:center;gap:.4rem;font-weight:700;border-radius:.7rem;transition:all .15s;font-size:.85rem}
+    .btn{display:inline-flex;align-items:center;gap:.4rem;font-weight:700;border-radius:.7rem;transition:all .15s;font-size:.85rem;cursor:pointer}
     .btn-primary{background:#0B9D46;color:#fff;padding:.6rem 1.1rem}.btn-primary:hover{background:#087A37}
     .btn-sec{background:#fff;border:1px solid #E6E8DC;color:#1F2113;padding:.55rem 1rem}.btn-sec:hover{background:#F5F7EE}
     .btn-danger{background:#fff;border:1px solid #f0c4c4;color:#C0392B;padding:.5rem .8rem}
@@ -33,6 +33,7 @@
     .navi:hover:not(.active){background:#F5F7EE}
     .skel{background:linear-gradient(90deg,#eee,#f6f6f6,#eee);background-size:200% 100%;animation:sh 1.2s infinite}
     @keyframes sh{0%{background-position:200% 0}100%{background-position:-200% 0}}
+    .pill{font-size:.68rem;font-weight:700;padding:.18rem .6rem;border-radius:999px;text-transform:capitalize}
   </style>
 </head>
 <body x-data="admin()" x-init="init()" x-cloak>
@@ -63,6 +64,8 @@
       <nav class="space-y-1 flex-1">
         <div class="navi" :class="view==='dashboard'&&'active'" @click="view='dashboard'">Dashboard</div>
         <div class="navi" :class="view==='leads'&&'active'" @click="view='leads';loadLeads()">Aanvragen <span x-show="leads.length" class="ml-auto text-[11px] font-bold px-1.5 rounded-full" style="background:#E4F2E8;color:#087A37" x-text="leads.length"></span></div>
+        <div class="navi" :class="view==='quotes'&&'active'" @click="view='quotes';loadQuotes()">Offertes <span x-show="quotes.length" class="ml-auto text-[11px] font-bold px-1.5 rounded-full" style="background:#E4F2E8;color:#087A37" x-text="quotes.length"></span></div>
+        <div class="navi" :class="view==='invoices'&&'active'" @click="view='invoices';loadInvoices()">Facturen <span x-show="invoices.length" class="ml-auto text-[11px] font-bold px-1.5 rounded-full" style="background:#E4F2E8;color:#087A37" x-text="invoices.length"></span></div>
         <div class="navi" :class="view==='products'&&'active'" @click="view='products';loadProducts()">Producten &amp; prijzen</div>
         <div class="navi" :class="view==='settings'&&'active'" @click="view='settings'">Instellingen</div>
       </nav>
@@ -72,8 +75,9 @@
     <!-- Mobile topbar -->
     <div class="md:hidden fixed top-0 inset-x-0 bg-white border-b z-20 flex items-center gap-2 px-3 py-2" style="border-color:#E6E8DC">
       <img src="/favicon.png" class="w-8 h-8 rounded-lg">
-      <select class="inp !py-1.5 flex-1" x-model="view" @change="view==='leads'&&loadLeads(); view==='products'&&loadProducts()">
+      <select class="inp !py-1.5 flex-1" x-model="view" @change="view==='leads'&&loadLeads(); view==='quotes'&&loadQuotes(); view==='invoices'&&loadInvoices(); view==='products'&&loadProducts()">
         <option value="dashboard">Dashboard</option><option value="leads">Aanvragen</option>
+        <option value="quotes">Offertes</option><option value="invoices">Facturen</option>
         <option value="products">Producten &amp; prijzen</option><option value="settings">Instellingen</option>
       </select>
       <button class="btn btn-sec !px-3" @click="logout()">Uit</button>
@@ -128,6 +132,7 @@
                   <template x-for="s in stages" :key="s"><option :value="s" x-text="s"></option></template>
                 </select>
                 <span class="text-[11px] px-2 py-1 rounded-full self-center" style="background:#F5F7EE" x-text="fmt(l.created)"></span>
+                <button class="btn btn-primary self-center" @click="quoteFromLead(l)">+ Offerte</button>
                 <button class="btn btn-danger self-center" @click="delLead(l)">Verwijderen</button>
               </div>
               <div class="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs" style="color:#4b5043">
@@ -145,6 +150,65 @@
                 </div>
               </template>
               <p x-show="l.note" class="mt-2 text-sm italic" style="color:#4b5043" x-text="'“'+l.note+'”'"></p>
+            </div>
+          </template>
+        </div>
+      </section>
+
+      <!-- OFFERTES -->
+      <section x-show="view==='quotes'">
+        <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
+          <h1 class="font-h text-2xl font-bold">Offertes</h1>
+          <button class="btn btn-primary" @click="newDoc('quote')">+ Nieuwe offerte</button>
+        </div>
+        <template x-if="quotesLoading"><div class="space-y-2"><template x-for="i in 4"><div class="skel h-16 rounded-xl"></div></template></div></template>
+        <template x-if="!quotesLoading && quotes.length===0"><div class="card p-10 text-center"><p class="font-h font-bold mb-1">Nog geen offertes</p><p class="text-sm" style="color:#6B7060">Maak een offerte vanuit een aanvraag of los via “Nieuwe offerte”.</p></div></template>
+        <div class="space-y-2" x-show="!quotesLoading && quotes.length">
+          <template x-for="q in quotes" :key="q.id">
+            <div class="card p-4 flex items-center gap-3 flex-wrap">
+              <div class="flex-1 min-w-[180px]">
+                <p class="font-h font-bold text-sm" x-text="q.nummer+' · '+(q.klant_naam||'—')"></p>
+                <p class="text-xs" style="color:#6B7060"><span x-text="fmtDate(q.datum)"></span> · geldig t/m <span x-text="fmtDate(q.geldig_tot)"></span></p>
+              </div>
+              <span class="font-h font-bold" x-text="euro(q.totaal)"></span>
+              <span class="pill" :style="statusStyle(q.status)" x-text="q.status"></span>
+              <div class="flex gap-1.5 flex-wrap">
+                <button class="btn btn-sec !py-1.5 !px-2.5 text-xs" @click="editDoc('quote',q.id)">Bewerken</button>
+                <button class="btn btn-sec !py-1.5 !px-2.5 text-xs" @click="openDoc('quote',q)">Bekijk</button>
+                <button class="btn btn-sec !py-1.5 !px-2.5 text-xs" @click="sendDoc('quote',q)">Verstuur</button>
+                <button class="btn btn-sec !py-1.5 !px-2.5 text-xs" @click="invoiceFromQuote(q)" x-show="q.status==='geaccepteerd'">→ Factuur</button>
+                <button class="btn btn-danger !py-1.5 !px-2 text-xs" @click="delDoc('quote',q)">×</button>
+              </div>
+            </div>
+          </template>
+        </div>
+      </section>
+
+      <!-- FACTUREN -->
+      <section x-show="view==='invoices'">
+        <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
+          <h1 class="font-h text-2xl font-bold">Facturen</h1>
+          <button class="btn btn-primary" @click="newDoc('invoice')">+ Nieuwe factuur</button>
+        </div>
+        <template x-if="invoicesLoading"><div class="space-y-2"><template x-for="i in 4"><div class="skel h-16 rounded-xl"></div></template></div></template>
+        <template x-if="!invoicesLoading && invoices.length===0"><div class="card p-10 text-center"><p class="font-h font-bold mb-1">Nog geen facturen</p><p class="text-sm" style="color:#6B7060">Maak een factuur van een geaccepteerde offerte of los via “Nieuwe factuur”.</p></div></template>
+        <div class="space-y-2" x-show="!invoicesLoading && invoices.length">
+          <template x-for="f in invoices" :key="f.id">
+            <div class="card p-4 flex items-center gap-3 flex-wrap">
+              <div class="flex-1 min-w-[180px]">
+                <p class="font-h font-bold text-sm" x-text="f.nummer+' · '+(f.klant_naam||'—')"></p>
+                <p class="text-xs" style="color:#6B7060"><span x-text="fmtDate(f.datum)"></span> · vervalt <span x-text="fmtDate(f.vervaldatum)"></span></p>
+              </div>
+              <span class="font-h font-bold" x-text="euro(f.totaal)"></span>
+              <select class="inp !w-auto !py-1.5 text-xs" x-model="f.status" @change="setDocStatus('invoice',f,f.status)">
+                <option value="open">open</option><option value="betaald">betaald</option><option value="verlopen">verlopen</option>
+              </select>
+              <div class="flex gap-1.5 flex-wrap">
+                <button class="btn btn-sec !py-1.5 !px-2.5 text-xs" @click="editDoc('invoice',f.id)">Bewerken</button>
+                <button class="btn btn-sec !py-1.5 !px-2.5 text-xs" @click="openDoc('invoice',f)">Bekijk</button>
+                <button class="btn btn-sec !py-1.5 !px-2.5 text-xs" @click="sendDoc('invoice',f)">Verstuur</button>
+                <button class="btn btn-danger !py-1.5 !px-2 text-xs" @click="delDoc('invoice',f)">×</button>
+              </div>
             </div>
           </template>
         </div>
@@ -184,9 +248,9 @@
       </section>
 
       <!-- SETTINGS -->
-      <section x-show="view==='settings'" class="max-w-md">
+      <section x-show="view==='settings'" class="max-w-2xl">
         <h1 class="font-h text-2xl font-bold mb-4">Instellingen</h1>
-        <div class="card p-5">
+        <div class="card p-5 mb-4">
           <label class="lbl">Uurtarief (voor prijsberekening)</label>
           <div class="flex items-center gap-2 mt-1">
             <span style="color:#6B7060">€</span>
@@ -194,6 +258,34 @@
             <button class="btn btn-primary" @click="saveSettings()">Opslaan</button>
           </div>
           <p class="text-xs mt-2" style="color:#6B7060">De verkoopprijs per m²/m in de configurator = inkoopprijs + (uren × dit uurtarief).</p>
+        </div>
+
+        <div class="card p-5 mb-4">
+          <h2 class="font-h font-bold mb-1">Bedrijfsgegevens</h2>
+          <p class="text-xs mb-3" style="color:#6B7060">Deze gegevens staan op de kop en voet van elke offerte en factuur.</p>
+          <div class="grid sm:grid-cols-2 gap-3">
+            <div class="sm:col-span-2"><label class="lbl">Bedrijfsnaam</label><input class="inp mt-1" x-model="bedrijf.naam"></div>
+            <div><label class="lbl">Adres</label><input class="inp mt-1" x-model="bedrijf.adres" placeholder="Straat 1"></div>
+            <div><label class="lbl">Postcode &amp; plaats</label><input class="inp mt-1" x-model="bedrijf.postcode_plaats" placeholder="4330 AA Middelburg"></div>
+            <div><label class="lbl">Telefoon</label><input class="inp mt-1" x-model="bedrijf.telefoon"></div>
+            <div><label class="lbl">E-mail</label><input class="inp mt-1" x-model="bedrijf.email"></div>
+            <div><label class="lbl">Website</label><input class="inp mt-1" x-model="bedrijf.website"></div>
+            <div><label class="lbl">Regio</label><input class="inp mt-1" x-model="bedrijf.regio"></div>
+            <div><label class="lbl">KvK-nummer</label><input class="inp mt-1" x-model="bedrijf.kvk"></div>
+            <div><label class="lbl">BTW-nummer</label><input class="inp mt-1" x-model="bedrijf.btw"></div>
+            <div class="sm:col-span-2"><label class="lbl">IBAN (voor facturen)</label><input class="inp mt-1" x-model="bedrijf.iban" placeholder="NL00 BANK 0000 0000 00"></div>
+          </div>
+          <button class="btn btn-primary mt-4" @click="saveSettings()">Bedrijfsgegevens opslaan</button>
+        </div>
+
+        <div class="card p-5">
+          <h2 class="font-h font-bold mb-1">E-mailverzending</h2>
+          <template x-if="mailProvider">
+            <p class="text-sm" style="color:#087A37">✓ Mailserver gekoppeld (<span x-text="mailProvider"></span>). Offertes en facturen worden direct per e-mail verstuurd.</p>
+          </template>
+          <template x-if="!mailProvider">
+            <p class="text-sm" style="color:#6B7060">Er is nog geen mailserver gekoppeld. Bij “Verstuur” opent de mail in uw eigen mailprogramma met een klantlink. Koppel een provider door de omgevingsvariabele <b>RESEND_API_KEY</b> (en optioneel <b>RESEND_FROM</b>) in Vercel in te stellen voor automatische verzending.</p>
+          </template>
         </div>
       </section>
     </main>
@@ -236,35 +328,172 @@
     </div>
   </div>
 
+  <!-- OFFERTE / FACTUUR MODAL -->
+  <div x-show="doc" x-cloak class="fixed inset-0 z-40 flex items-center justify-center p-4" style="background:rgba(15,16,9,.7)" @click="doc=null">
+    <div class="card w-full max-w-2xl max-h-[92vh] overflow-y-auto" @click.stop x-show="doc">
+      <template x-if="doc">
+        <div class="p-6">
+          <div class="flex items-center justify-between mb-4">
+            <h2 class="font-h font-bold text-lg" x-text="(doc.kind==='quote'?'Offerte':'Factuur')+(doc.nummer?(' '+doc.nummer):' — nieuw')"></h2>
+            <span x-show="doc.status" class="pill" :style="statusStyle(doc.status)" x-text="doc.status"></span>
+          </div>
+
+          <div class="grid sm:grid-cols-2 gap-3 mb-4">
+            <div><label class="lbl">Klantnaam</label><input class="inp mt-1" x-model="doc.klant_naam"></div>
+            <div><label class="lbl">E-mail</label><input class="inp mt-1" x-model="doc.klant_email"></div>
+            <div class="sm:col-span-2"><label class="lbl">Adres</label><input class="inp mt-1" x-model="doc.klant_adres" placeholder="Straat 1, 4330 AA Middelburg"></div>
+            <div x-show="doc.kind==='quote'"><label class="lbl">Niveau</label><input class="inp mt-1" x-model="doc.tier" placeholder="Standaard"></div>
+            <div>
+              <label class="lbl" x-text="doc.kind==='quote'?'Geldig tot':'Vervaldatum'"></label>
+              <input type="date" class="inp mt-1" x-model="doc.datePick">
+            </div>
+            <div><label class="lbl">BTW %</label><input type="number" class="inp mt-1" x-model.number="doc.btw_pct"></div>
+          </div>
+
+          <label class="lbl">Regels</label>
+          <div class="mt-1 space-y-2">
+            <template x-for="(r,i) in doc.regels" :key="i">
+              <div class="flex gap-2 items-center">
+                <input class="inp !py-1.5" style="flex:3" x-model="r.omschrijving" placeholder="Omschrijving">
+                <input type="number" step="0.1" class="inp !py-1.5 text-right" style="width:70px" x-model.number="r.aantal" placeholder="1">
+                <input class="inp !py-1.5" style="width:60px" x-model="r.eenheid" placeholder="m²">
+                <input type="number" step="0.01" class="inp !py-1.5 text-right" style="width:96px" x-model.number="r.prijs" placeholder="prijs">
+                <span class="text-sm font-semibold text-right" style="width:96px" x-text="euro((r.aantal||0)*(r.prijs||0))"></span>
+                <button class="btn btn-danger !py-1 !px-2 text-xs" @click="doc.regels.splice(i,1)">×</button>
+              </div>
+            </template>
+          </div>
+          <button class="btn btn-sec !py-1.5 mt-2 text-xs" @click="doc.regels.push({omschrijving:'',aantal:1,eenheid:'',prijs:0})">+ Regel toevoegen</button>
+
+          <div class="flex justify-end mt-4">
+            <div class="w-64 text-sm">
+              <div class="flex justify-between py-1"><span style="color:#6B7060">Subtotaal</span><span x-text="euro(docTotals.subtotaal)"></span></div>
+              <div class="flex justify-between py-1"><span style="color:#6B7060">BTW <span x-text="doc.btw_pct||0"></span>%</span><span x-text="euro(docTotals.btw)"></span></div>
+              <div class="flex justify-between py-2 mt-1 border-t font-h font-bold text-base" style="border-color:#1F2113"><span>Totaal</span><span x-text="euro(docTotals.totaal)"></span></div>
+            </div>
+          </div>
+
+          <div class="mt-3"><label class="lbl">Notitie / voorwaarden</label><textarea class="inp mt-1" rows="2" x-model="doc.note" placeholder="bv. Prijs incl. afvoer, excl. bestrating klant."></textarea></div>
+
+          <div class="flex gap-2 pt-4 flex-wrap">
+            <button class="btn btn-primary justify-center" :disabled="docSaving" @click="saveDoc()" x-text="docSaving?'Opslaan…':(doc.id?'Wijzigingen opslaan':'Opslaan')"></button>
+            <button class="btn btn-sec" x-show="doc.id" @click="openDoc(doc.kind,doc)">Bekijk / print</button>
+            <button class="btn btn-sec" x-show="doc.id" @click="sendDoc(doc.kind,doc)">Verstuur</button>
+            <button class="btn btn-sec ml-auto" @click="doc=null">Sluiten</button>
+          </div>
+        </div>
+      </template>
+    </div>
+  </div>
+
+  <!-- MAIL FALLBACK MODAL -->
+  <div x-show="mailModal" x-cloak class="fixed inset-0 z-50 flex items-center justify-center p-4" style="background:rgba(15,16,9,.7)" @click="mailModal=null">
+    <div class="card w-full max-w-md p-6" @click.stop x-show="mailModal">
+      <template x-if="mailModal">
+        <div>
+          <h2 class="font-h font-bold text-lg mb-2">Versturen</h2>
+          <p class="text-sm mb-4" style="color:#6B7060">Er is nog geen mailserver gekoppeld. Open de mail in uw eigen mailprogramma, of kopieer de klantlink.</p>
+          <div class="flex flex-col gap-2">
+            <a class="btn btn-primary justify-center" :href="mailModal.mailto">Openen in mailprogramma</a>
+            <button class="btn btn-sec justify-center" @click="copy(mailModal.link)">Klantlink kopiëren</button>
+            <a class="btn btn-sec justify-center" :href="mailModal.link" target="_blank">Document openen</a>
+            <button class="btn btn-sec justify-center" x-show="mailModal.type==='quote'" @click="markSent(mailModal)">Markeer als verzonden</button>
+          </div>
+          <p class="text-xs mt-3 break-all" style="color:#9aa08d" x-text="mailModal.link"></p>
+          <button class="btn btn-sec w-full justify-center mt-3" @click="mailModal=null">Sluiten</button>
+        </div>
+      </template>
+    </div>
+  </div>
+
 <script>
 function admin(){return{
   authed:false, view:'dashboard', pw:'', busy:false, loginErr:'',
   today:new Date().toLocaleDateString('nl-NL',{weekday:'long',day:'numeric',month:'long',year:'numeric'}),
   leads:[], stages:['nieuw','contact','offerte','ingepland','gewonnen','verloren'], leadsLoading:false,
+  quotes:[], quotesLoading:false, invoices:[], invoicesLoading:false,
   products:[], categorien:[], uurtarief:55, prodLoading:false, editing:null, saving:false,
+  bedrijf:{naam:'Essenza Tuinen',adres:'',postcode_plaats:'',regio:'',kvk:'',btw:'',iban:'',email:'',telefoon:'',website:''}, mailProvider:null,
+  doc:null, docSaving:false, mailModal:null,
 
   async api(path,opts){ const r=await fetch(path,Object.assign({headers:{'Content-Type':'application/json'}},opts));
     let d; try{d=await r.json()}catch{d={ok:false,error:'Serverfout ('+r.status+')'}} if(r.status===401){this.authed=false} return d; },
-  euro(n){return '€ '+Math.round(+n||0).toLocaleString('nl-NL')},
+  euro(n){return '€ '+(Math.round((+n||0)*100)/100).toLocaleString('nl-NL',{minimumFractionDigits:2,maximumFractionDigits:2})},
   fmt(iso){ if(!iso)return''; const d=new Date(iso); const diff=(Date.now()-d)/1000;
     if(diff<3600)return Math.max(1,Math.round(diff/60))+' min'; if(diff<86400)return Math.round(diff/3600)+' uur';
     return d.toLocaleDateString('nl-NL',{day:'numeric',month:'short'}); },
+  fmtDate(iso){ if(!iso)return'—'; try{return new Date(iso).toLocaleDateString('nl-NL',{day:'numeric',month:'short',year:'numeric'})}catch{return iso} },
+  statusStyle(s){ const g={geaccepteerd:1,betaald:1}, r={afgewezen:1,verlopen:1,verloren:1};
+    if(g[s])return'background:#E4F2E8;color:#087A37'; if(r[s])return'background:#fbe4e4;color:#C0392B'; return'background:#FCF3D9;color:#8a6d0b'; },
+  copy(t){ navigator.clipboard&&navigator.clipboard.writeText(t); alert('Link gekopieerd'); },
   get productCats(){ return [...new Set(this.products.map(p=>p.categorie))]; },
+  get docTotals(){ const rs=(this.doc&&this.doc.regels)||[]; const sub=rs.reduce((s,r)=>s+(+r.aantal||0)*(+r.prijs||0),0);
+    const pct=this.doc?+this.doc.btw_pct||0:0; const btw=sub*pct/100; return {subtotaal:sub,btw:btw,totaal:sub+btw}; },
   get kpis(){ const open=this.leads.filter(l=>['nieuw','contact','offerte','ingepland'].includes(l.status)).length;
-    const won=this.leads.filter(l=>l.status==='gewonnen').length;
+    const openFac=this.invoices.filter(f=>f.status==='open').reduce((s,f)=>s+(+f.totaal||0),0);
     const val=this.leads.filter(l=>l.status!=='verloren').reduce((s,l)=>s+(+l.richtprijs||0),0);
     return [{l:'Aanvragen totaal',v:this.leads.length,c:'#1F2113'},{l:'Open aanvragen',v:open,c:'#0B9D46'},
-      {l:'Gewonnen',v:won,c:'#087A37'},{l:'Pipeline-waarde',v:this.euro(val),c:'#1F2113'}]; },
+      {l:'Openstaande facturen',v:this.euro(openFac),c:'#1F2113'},{l:'Pipeline-waarde',v:this.euro(val),c:'#1F2113'}]; },
 
-  async init(){ const s=await this.api('/api/session'); this.authed=!!(s&&s.authed); if(this.authed){this.loadLeads();this.loadProducts();} },
+  async init(){ const s=await this.api('/api/session'); this.authed=!!(s&&s.authed);
+    if(this.authed){ this.loadLeads(); this.loadProducts(); this.loadQuotes(); this.loadInvoices(); this.loadSettings(); } },
   async login(){ this.busy=true;this.loginErr=''; const d=await this.api('/api/session',{method:'POST',body:JSON.stringify({password:this.pw})});
-    this.busy=false; if(d.ok){this.authed=true;this.pw='';this.loadLeads();this.loadProducts();}else{this.loginErr=d.error||'Mislukt';} },
+    this.busy=false; if(d.ok){this.authed=true;this.pw='';this.loadLeads();this.loadProducts();this.loadQuotes();this.loadInvoices();this.loadSettings();}else{this.loginErr=d.error||'Mislukt';} },
   async logout(){ await this.api('/api/session',{method:'DELETE'}); this.authed=false; },
 
   async loadLeads(){ this.leadsLoading=true; const d=await this.api('/api/leads'); this.leadsLoading=false;
     if(d.ok){this.leads=d.leads;this.stages=d.stages||this.stages;} },
   async updateLead(l,patch){ await this.api('/api/leads',{method:'PATCH',body:JSON.stringify(Object.assign({id:l.id},patch))}); },
   async delLead(l){ if(!confirm('Aanvraag verwijderen?'))return; await this.api('/api/leads',{method:'DELETE',body:JSON.stringify({id:l.id})}); this.leads=this.leads.filter(x=>x.id!==l.id); },
+
+  async loadQuotes(){ this.quotesLoading=true; const d=await this.api('/api/quotes'); this.quotesLoading=false; if(d.ok)this.quotes=d.quotes; },
+  async loadInvoices(){ this.invoicesLoading=true; const d=await this.api('/api/invoices'); this.invoicesLoading=false; if(d.ok)this.invoices=d.invoices; },
+
+  isoPlusDays(days){ const d=new Date(Date.now()+days*864e5); return d.toISOString().slice(0,10); },
+  newDoc(kind){ this.doc={ kind:kind, regels:[{omschrijving:'',aantal:1,eenheid:'',prijs:0}], btw_pct:21, klant_naam:'',klant_email:'',klant_adres:'',tier:'',note:'',
+    datePick:this.isoPlusDays(kind==='quote'?30:14) }; },
+  quoteFromLead(l){
+    const regels=[];
+    if(l.richtprijs) regels.push({omschrijving:'Tuinaanleg volgens ontwerp'+(l.tier?(' ('+l.tier+')'):''),aantal:1,eenheid:'',prijs:+l.richtprijs});
+    else regels.push({omschrijving:'',aantal:1,eenheid:'',prijs:0});
+    const detail = l.ontwerp&&l.ontwerp.items&&l.ontwerp.items.length ? ('Ontwerp: '+l.ontwerp.items.join(', ')) : (l.note||'');
+    this.doc={ kind:'quote', lead_id:l.id, regels:regels, btw_pct:21,
+      klant_naam:l.naam||'', klant_email:l.email||'', klant_adres:l.plaats||'', tier:l.tier||'', note:detail,
+      datePick:this.isoPlusDays(30) };
+    this.view='quotes';
+  },
+  async editDoc(kind,id){ const d=await this.api('/api/'+(kind==='quote'?'quotes':'invoices')+'?id='+id); if(!d.ok)return alert(d.error||'Kon niet laden');
+    const o=kind==='quote'?d.quote:d.invoice; o.kind=kind; o.datePick=(kind==='quote'?o.geldig_tot:o.vervaldatum||'').slice(0,10);
+    if(!o.regels||!o.regels.length)o.regels=[{omschrijving:'',aantal:1,eenheid:'',prijs:0}]; this.doc=o; },
+  async saveDoc(){ this.docSaving=true; const kind=this.doc.kind; const isQ=kind==='quote';
+    const body={ klant_naam:this.doc.klant_naam, klant_email:this.doc.klant_email, klant_adres:this.doc.klant_adres,
+      regels:this.doc.regels.filter(r=>r.omschrijving||r.prijs), btw_pct:this.doc.btw_pct, note:this.doc.note };
+    if(isQ){ body.tier=this.doc.tier; body.geldig_tot=this.doc.datePick; } else { body.vervaldatum=this.doc.datePick; }
+    let d;
+    if(this.doc.id){ body.id=this.doc.id; d=await this.api('/api/'+(isQ?'quotes':'invoices'),{method:'PATCH',body:JSON.stringify(body)}); }
+    else { if(this.doc.lead_id)body.lead_id=this.doc.lead_id; if(isQ)body.geldig_dagen=null; d=await this.api('/api/'+(isQ?'quotes':'invoices'),{method:'POST',body:JSON.stringify(body)}); }
+    this.docSaving=false;
+    if(!d.ok)return alert(d.error||'Opslaan mislukt');
+    isQ?this.loadQuotes():this.loadInvoices(); if(this.doc.lead_id)this.loadLeads();
+    // Houd de modal open op een net-aangemaakt document zodat versturen/printen direct kan
+    if(!this.doc.id&&d.id){ await this.editDoc(kind,d.id); } else { this.doc=null; }
+  },
+  async delDoc(kind,row){ if(!confirm(row.nummer+' verwijderen?'))return; await this.api('/api/'+(kind==='quote'?'quotes':'invoices'),{method:'DELETE',body:JSON.stringify({id:row.id})});
+    kind==='quote'?this.loadQuotes():this.loadInvoices(); },
+  openDoc(kind,row){ window.open('/api/document?type='+(kind==='quote'?'quote':'invoice')+'&token='+row.token,'_blank'); },
+  async setDocStatus(kind,row,status){ await this.api('/api/'+(kind==='quote'?'quotes':'invoices'),{method:'PATCH',body:JSON.stringify({id:row.id,status:status})}); },
+  async invoiceFromQuote(q){ if(!confirm('Factuur maken van '+q.nummer+'?'))return;
+    const d=await this.api('/api/invoices',{method:'POST',body:JSON.stringify({quote_id:q.id})});
+    if(!d.ok)return alert(d.error||'Mislukt'); this.loadInvoices(); this.view='invoices'; alert('Factuur '+d.nummer+' aangemaakt.'); },
+
+  async sendDoc(kind,row){
+    if(!row.klant_email){ if(!confirm('Er is geen e-mailadres ingevuld. Toch doorgaan (u kunt de link kopiëren)?'))return; }
+    const d=await this.api('/api/mail',{method:'POST',body:JSON.stringify({type:kind==='quote'?'quote':'invoice',id:row.id})});
+    if(!d.ok)return alert(d.error||'Versturen mislukt');
+    if(d.sent){ alert('Verstuurd naar de klant.'); kind==='quote'?this.loadQuotes():this.loadInvoices(); }
+    else { this.mailModal={type:kind==='quote'?'quote':'invoice',id:row.id,link:d.link,mailto:d.mailto}; }
+  },
+  async markSent(m){ await this.api('/api/quotes',{method:'PATCH',body:JSON.stringify({id:m.id,status:'verzonden'})}); this.mailModal=null; this.loadQuotes(); },
 
   async loadProducts(){ this.prodLoading=true; const d=await this.api('/api/products?all=1'); this.prodLoading=false;
     if(d.ok){this.products=d.products;this.categorien=d.categorien;this.uurtarief=d.uurtarief;} },
@@ -279,8 +508,9 @@ function admin(){return{
       const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(img,0,0,w,h);
       this.editing.foto=c.toDataURL('image/jpeg',0.82); }; img.src=rd.result; }; rd.readAsDataURL(f); },
 
-  async saveSettings(){ const d=await this.api('/api/settings',{method:'PUT',body:JSON.stringify({uurtarief:this.uurtarief})});
-    if(d.ok){this.loadProducts();alert('Opgeslagen');} },
+  async loadSettings(){ const d=await this.api('/api/settings'); if(d.ok){ this.uurtarief=d.uurtarief; if(d.bedrijf)this.bedrijf=Object.assign(this.bedrijf,d.bedrijf); this.mailProvider=d.mailProvider; } },
+  async saveSettings(){ const d=await this.api('/api/settings',{method:'PUT',body:JSON.stringify({uurtarief:this.uurtarief,bedrijf:this.bedrijf})});
+    if(d.ok){this.loadProducts();this.loadSettings();alert('Opgeslagen');}else{alert(d.error||'Opslaan mislukt');} },
 }}
 </script>
 </body>

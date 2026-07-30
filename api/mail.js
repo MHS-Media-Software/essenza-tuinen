@@ -1,0 +1,82 @@
+// Verstuur een offerte of factuur per e-mail naar de klant (met deel-link).
+// Gebruikt Resend als RESEND_API_KEY is ingesteld; anders wordt een mailto-fallback
+// teruggegeven zodat de beheerder de mail alsnog handmatig kan versturen.
+import * as db from './_db.js';
+import { getBedrijf, euro } from './_doc.js';
+
+export default async function handler(req, res) {
+  try {
+    await db.ensureSchema();
+    if (!db.requireAdmin(req, res)) return;
+    if (req.method !== 'POST') return res.status(405).json({ ok: false, error: 'method' });
+
+    const b = await db.readBody(req);
+    const type = b.type === 'invoice' ? 'invoice' : 'quote';
+    const id = +b.id; if (!id) return res.status(400).json({ ok: false, error: 'id' });
+    const table = type === 'invoice' ? 'invoices' : 'quotes';
+    const doc = (await db.q(`SELECT * FROM ${table} WHERE id=?`, [id]))[0];
+    if (!doc) return res.status(404).json({ ok: false, error: 'niet gevonden' });
+    const aan = String(b.email || doc.klant_email || '').trim();
+    if (!aan) return res.status(400).json({ ok: false, error: 'Geen e-mailadres bij deze klant. Vul eerst een e-mailadres in.' });
+
+    const bedrijf = await getBedrijf();
+    const proto = (req.headers['x-forwarded-proto'] || 'https').split(',')[0];
+    const host = req.headers['host'];
+    const link = `${proto}://${host}/api/document?type=${type}&token=${doc.token}`;
+    const isQuote = type === 'quote';
+    const stuk = isQuote ? 'offerte' : 'factuur';
+    const onderwerp = b.subject || `${isQuote ? 'Uw offerte' : 'Factuur'} ${doc.nummer} · ${bedrijf.naam}`;
+    const naam = doc.klant_naam || 'geachte heer/mevrouw';
+    const tekst = `Beste ${naam},\n\n${isQuote
+      ? `Hierbij ontvangt u onze offerte (${doc.nummer}) op maat. U kunt de offerte online bekijken, downloaden en direct akkoord geven via onderstaande link.`
+      : `Hierbij ontvangt u factuur ${doc.nummer} met een totaalbedrag van ${euro(doc.totaal)}. U kunt de factuur online bekijken en downloaden via onderstaande link.`}\n\n${link}\n\nMet vriendelijke groet,\n${bedrijf.naam}${bedrijf.telefoon ? '\n' + bedrijf.telefoon : ''}`;
+
+    const html = mailHtml({ bedrijf, naam, isQuote, doc, link });
+    const key = process.env.RESEND_API_KEY;
+    const from = process.env.RESEND_FROM || `${bedrijf.naam} <onboarding@resend.dev>`;
+    const now = new Date().toISOString();
+
+    if (key) {
+      const r = await fetch('https://api.resend.com/emails', {
+        method: 'POST', headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ from, to: [aan], subject: onderwerp, html, text: tekst }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        await db.exec('INSERT INTO mails(ref_type,ref_id,aan,onderwerp,status,provider,fout,created) VALUES(?,?,?,?,?,?,?,?)',
+          [type, id, aan, onderwerp, 'mislukt', 'resend', String(j.message || j.name || r.status).slice(0, 180), now]).catch(() => {});
+        return res.status(502).json({ ok: false, error: `Verzenden mislukt: ${j.message || j.name || ('fout ' + r.status)}` });
+      }
+      await db.exec('INSERT INTO mails(ref_type,ref_id,aan,onderwerp,status,provider,created) VALUES(?,?,?,?,?,?,?)',
+        [type, id, aan, onderwerp, 'verzonden', 'resend', now]).catch(() => {});
+      if (isQuote && doc.status === 'concept') await db.exec("UPDATE quotes SET status='verzonden', updated=? WHERE id=?", [now, id]).catch(() => {});
+      return res.status(200).json({ ok: true, sent: true, link });
+    }
+
+    // Geen mailprovider gekoppeld → mailto-fallback (opent het mailprogramma van de beheerder).
+    const mailto = `mailto:${encodeURIComponent(aan)}?subject=${encodeURIComponent(onderwerp)}&body=${encodeURIComponent(tekst)}`;
+    await db.exec('INSERT INTO mails(ref_type,ref_id,aan,onderwerp,status,provider,created) VALUES(?,?,?,?,?,?,?)',
+      [type, id, aan, onderwerp, 'handmatig', 'mailto', now]).catch(() => {});
+    return res.status(200).json({ ok: true, sent: false, notConfigured: true, link, mailto, onderwerp, aan });
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: String(e.message || e).slice(0, 200) });
+  }
+}
+
+function mailHtml({ bedrijf, naam, isQuote, doc, link }) {
+  const BRAND = '#0B9D46';
+  return `<div style="font-family:Inter,Arial,sans-serif;max-width:560px;margin:0 auto;color:#1F2113">
+  <div style="height:6px;background:${BRAND};border-radius:6px 6px 0 0"></div>
+  <div style="padding:28px 30px;background:#fff;border:1px solid #E6E8DC;border-top:none;border-radius:0 0 12px 12px">
+    <h2 style="font-family:Poppins,Arial,sans-serif;margin:0 0 14px">${isQuote ? 'Uw offerte op maat' : 'Uw factuur'}</h2>
+    <p style="margin:0 0 12px">Beste ${esc(naam)},</p>
+    <p style="margin:0 0 12px">${isQuote
+      ? `Hierbij ontvangt u onze offerte <b>${esc(doc.nummer)}</b>. Bekijk, download en geef eenvoudig akkoord via de knop hieronder.`
+      : `Hierbij ontvangt u factuur <b>${esc(doc.nummer)}</b> met een totaalbedrag van <b>${euro(doc.totaal)}</b>.`}</p>
+    <p style="text-align:center;margin:24px 0">
+      <a href="${link}" style="background:${BRAND};color:#fff;text-decoration:none;font-weight:700;padding:12px 26px;border-radius:10px;display:inline-block">${isQuote ? 'Offerte bekijken' : 'Factuur bekijken'}</a>
+    </p>
+    <p style="margin:0;color:#6B7060;font-size:.85rem">Met vriendelijke groet,<br>${esc(bedrijf.naam)}${bedrijf.telefoon ? ' · ' + esc(bedrijf.telefoon) : ''}</p>
+  </div></div>`;
+}
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }

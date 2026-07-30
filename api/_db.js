@@ -69,9 +69,29 @@ function ensureSchema() {
       naam TEXT, email TEXT, data TEXT )` },
     { sql: `CREATE TABLE IF NOT EXISTS customers (
       id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT UNIQUE, pass_hash TEXT, naam TEXT, created TEXT )` },
+    { sql: `CREATE TABLE IF NOT EXISTS quotes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, nummer TEXT, token TEXT UNIQUE, lead_id INTEGER,
+      klant_naam TEXT, klant_email TEXT, klant_adres TEXT, datum TEXT, geldig_tot TEXT, tier TEXT,
+      regels TEXT, btw_pct REAL DEFAULT 21, subtotaal REAL, btw REAL, totaal REAL,
+      status TEXT DEFAULT 'concept', note TEXT, created TEXT, updated TEXT )` },
+    { sql: `CREATE TABLE IF NOT EXISTS invoices (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, nummer TEXT, token TEXT UNIQUE, quote_id INTEGER, lead_id INTEGER,
+      klant_naam TEXT, klant_email TEXT, klant_adres TEXT, datum TEXT, vervaldatum TEXT,
+      regels TEXT, btw_pct REAL DEFAULT 21, subtotaal REAL, btw REAL, totaal REAL,
+      status TEXT DEFAULT 'open', betaald_op TEXT, note TEXT, created TEXT )` },
+    { sql: `CREATE TABLE IF NOT EXISTS mails (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, ref_type TEXT, ref_id INTEGER, aan TEXT, onderwerp TEXT,
+      status TEXT, provider TEXT, fout TEXT, created TEXT )` },
     { sql: `CREATE TABLE IF NOT EXISTS settings ( key TEXT PRIMARY KEY, value TEXT )` },
   ]).catch(e => { _schemaReady = null; throw e; });
   return _schemaReady;
+}
+
+// Ophogende, doorlopende nummering (offertes/facturen) — atomair via RETURNING.
+async function nextSeq(key) {
+  const rows = await q(`INSERT INTO settings(key,value) VALUES(?, '1')
+    ON CONFLICT(key) DO UPDATE SET value = CAST(value AS INTEGER) + 1 RETURNING value`, [key]);
+  return Number(rows[0] && rows[0].value) || 1;
 }
 
 async function getSetting(key, fallback) {
@@ -164,5 +184,5 @@ async function readBody(req) {
   });
 }
 
-export { run, q, exec, ensureSchema, getSetting, setSetting, isAdmin, requireAdmin, setAuthCookie, clearAuthCookie, readBody, COOKIE,
+export { run, q, exec, ensureSchema, getSetting, setSetting, nextSeq, isAdmin, requireAdmin, setAuthCookie, clearAuthCookie, readBody, COOKIE,
   hashPw, verifyPw, customerEmail, setCustomerCookie, clearCustomerCookie };
