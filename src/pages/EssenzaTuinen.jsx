@@ -632,7 +632,7 @@ export function ProjectenPreview() {
         </motion.div>
         <div ref={track} className="mp-carousel flex gap-4 overflow-x-auto pb-2 snap-x snap-mandatory" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
           {uitgelicht.map((p, i) => (
-            <motion.div key={p.label + i} initial={{ opacity: 0, x: 24 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ delay: (i % 4) * 0.05, duration: 0.6 }}
+            <motion.div key={p.label + i} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: Math.min(i, 6) * 0.05, duration: 0.5 }}
               className="relative overflow-hidden group rounded-2xl flex-shrink-0 snap-start" style={{ width: 340, height: 420 }}>
               <img src={p.img} alt={p.label} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
               <div className="absolute inset-0" style={{ background: 'linear-gradient(to top, rgba(31,33,19,0.88) 0%, rgba(31,33,19,0.1) 55%, transparent 100%)' }} />
@@ -676,7 +676,7 @@ export function Reviews() {
         </motion.div>
         <div ref={track} className="mp-carousel flex gap-6 overflow-x-auto pb-2 snap-x snap-mandatory" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
           {REVIEWS.map((r, i) => (
-            <motion.div key={r.naam + i} initial={{ opacity: 0, x: 24 }} whileInView={{ opacity: 1, x: 0 }} viewport={{ once: true }} transition={{ delay: (i % 4) * 0.05 }}
+            <motion.div key={r.naam + i} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: Math.min(i, 6) * 0.05, duration: 0.5 }}
               className="p-7 rounded-3xl flex flex-col flex-shrink-0 snap-start" style={{ background: WHITE, border: `1px solid ${LINE}`, boxShadow: '0 10px 40px rgba(31,33,19,0.05)', width: 350 }}>
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-3">

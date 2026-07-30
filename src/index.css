@@ -1,3 +1,9 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Voorkom horizontale overflow/jitter door inschuif-animaties bij het laden. */
+html, body { overflow-x: hidden; max-width: 100%; }
+
+/* Verberg de scrollbalk van de horizontale carousels (reviews/projecten). */
+.mp-carousel::-webkit-scrollbar { display: none; }
