@@ -17,13 +17,23 @@ async function getBedrijf() {
 function euro(n) { return '€ ' + (Math.round((+n || 0) * 100) / 100).toLocaleString('nl-NL', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 function dnl(iso) { if (!iso) return '—'; try { return new Date(iso).toLocaleDateString('nl-NL', { day: 'numeric', month: 'long', year: 'numeric' }); } catch { return iso; } }
 
-// Bereken bedragen uit de regels ([{omschrijving,aantal,eenheid,prijs}]) + btw-percentage.
+// Bereken bedragen uit de regels ([{omschrijving,aantal,eenheid,prijs,btw?}]).
+// BTW is per regel (bv. levering boom 9%, uren 21%). Regels zonder eigen btw
+// vallen terug op btwPct (document-standaard, default 21).
 function computeTotals(regels, btwPct) {
   const rs = Array.isArray(regels) ? regels : [];
-  const subtotaal = rs.reduce((s, r) => s + (+r.aantal || 0) * (+r.prijs || 0), 0);
-  const pct = btwPct == null ? 21 : +btwPct;
-  const btw = subtotaal * pct / 100;
-  return { subtotaal: Math.round(subtotaal * 100) / 100, btw: Math.round(btw * 100) / 100, totaal: Math.round((subtotaal + btw) * 100) / 100 };
+  const fallback = btwPct == null ? 21 : +btwPct;
+  const round = (n) => Math.round(n * 100) / 100;
+  let subtotaal = 0; const per = {};
+  for (const r of rs) {
+    const line = (+r.aantal || 0) * (+r.prijs || 0);
+    subtotaal += line;
+    const rate = r.btw != null && r.btw !== '' ? +r.btw : fallback;
+    per[rate] = (per[rate] || 0) + line * rate / 100;
+  }
+  const btw = Object.values(per).reduce((a, b) => a + b, 0);
+  const btwBreakdown = Object.keys(per).map(rate => ({ rate: +rate, bedrag: round(per[rate]) })).sort((a, b) => a.rate - b.rate);
+  return { subtotaal: round(subtotaal), btw: round(btw), totaal: round(subtotaal + btw), btwBreakdown };
 }
 
 function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
@@ -33,6 +43,7 @@ function renderDocHTML({ kind, doc, bedrijf }) {
   const isQuote = kind === 'quote';
   const regels = (() => { try { return JSON.parse(doc.regels) || []; } catch { return []; } })();
   const totals = { subtotaal: doc.subtotaal, btw: doc.btw, totaal: doc.totaal };
+  const breakdown = computeTotals(regels, doc.btw_pct).btwBreakdown;
   const titel = isQuote ? 'Offerte' : 'Factuur';
   const statusNL = {
     concept: 'Concept', verzonden: 'Verzonden', geaccepteerd: 'Geaccepteerd', afgewezen: 'Afgewezen',
@@ -132,8 +143,9 @@ function renderDocHTML({ kind, doc, bedrijf }) {
     </table>
 
     <div class="totrow"><div class="totbox">
-      <div class="totline"><span class="muted">Subtotaal</span><span>${euro(totals.subtotaal)}</span></div>
-      <div class="totline"><span class="muted">BTW ${doc.btw_pct != null ? doc.btw_pct : 21}%</span><span>${euro(totals.btw)}</span></div>
+      <div class="totline"><span class="muted">Subtotaal (excl. btw)</span><span>${euro(totals.subtotaal)}</span></div>
+      ${(breakdown.length ? breakdown : [{ rate: doc.btw_pct != null ? doc.btw_pct : 21, bedrag: totals.btw }])
+        .map(b => `<div class="totline"><span class="muted">BTW ${b.rate}%</span><span>${euro(b.bedrag)}</span></div>`).join('')}
       <div class="totline grand"><span>Totaal</span><span>${euro(totals.totaal)}</span></div>
     </div></div>
 

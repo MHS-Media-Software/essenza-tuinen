@@ -3,7 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowUpRight, ArrowRight, Phone, Mail, MapPin, Menu, X, ChevronDown, CheckCircle, Check,
-  PencilRuler, Shovel, Hammer, Droplets, Leaf, TreePine,
+  PencilRuler, Shovel, Hammer, Droplets, Leaf, TreePine, Upload, Camera, Sparkles, RefreshCw,
 } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import ConceptAdminBar from '../components/ConceptAdminBar';
@@ -31,9 +31,9 @@ const LOGO       = '/generated/essenza-tuinen/logo.png';
 const LOGO_WHITE = '/generated/essenza-tuinen/logo-white.png';
 const EST    = 'Hoveniersbedrijf · ontwerp, aanleg & onderhoud';
 const EMAIL  = 'info@essenzatuinen.nl';
-const TEL     = '+31621448790';
-const TEL_TXT = '06 21 44 87 90';
-const WHATSAPP = '31621448790';
+const TEL     = '+31683566234';
+const TEL_TXT = '06 83 56 62 34';
+const WHATSAPP = '31683566234';
 const WERKGEBIED = 'Zeeland & West-Brabant';
 // Standalone app draait op de root ('' ); in de concepts-repo onder /essenza-tuinen.
 export const BASE = (typeof window !== 'undefined' && window.__ESSENZA_ROOT__) ? '' : '/essenza-tuinen';
@@ -988,19 +988,57 @@ export function ContactForm() {
   });
   const [sent, setSent] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [photo, setPhoto] = useState(null);      // geüploade/gemaakte foto (dataURL)
+  const [impressie, setImpressie] = useState(null); // AI-impressie (image url)
+  const [impLoading, setImpLoading] = useState(false);
+  const [impErr, setImpErr] = useState('');
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
-  const steps = ['Dienst', 'Uw tuin', 'Gegevens'];
+  const steps = ['Dienst', 'Uw tuin', 'Impressie', 'Gegevens'];
   const last = steps.length - 1;
+
+  // Foto → verkleinde dataURL (max 1280px) zodat de upload licht blijft.
+  const onFoto = (e) => {
+    const f = e.target.files && e.target.files[0]; if (!f) return;
+    setImpErr(''); const rd = new FileReader();
+    rd.onload = () => { const img = new Image(); img.onload = () => {
+      let { width: w, height: h } = img; const M = 1280; if (w > M || h > M) { const s = M / Math.max(w, h); w = Math.round(w * s); h = Math.round(h * s); }
+      const c = document.createElement('canvas'); c.width = w; c.height = h; c.getContext('2d').drawImage(img, 0, 0, w, h);
+      setPhoto(c.toDataURL('image/jpeg', 0.85)); setImpressie(null);
+    }; img.src = rd.result; }; rd.readAsDataURL(f);
+  };
+
+  const genImpressie = async () => {
+    if (!photo) return;
+    setImpLoading(true); setImpErr('');
+    try {
+      const prompt = `Herontwerp de tuin op deze foto tot een strak, professioneel aangelegde en goed onderhouden siertuin van hoog niveau${form.dienst && form.dienst !== 'Anders' ? `, met nadruk op ${form.dienst.toLowerCase()}` : ''}. Behoud het huis, de gevel, de erfgrenzen en het camerastandpunt en perspectief van de foto. Voeg een verzorgd terras, nette borders met beplanting en een strak gemaaid gazon toe, passend bij een luxe uitstraling. Fotorealistisch, realistische materialen en texturen, zacht daglicht, geen tekst, geen mensen, geen watermerk.`;
+      const r = await fetch('/api/render', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ photoDataUrl: photo, prompt }) });
+      const d = await r.json();
+      if (!d.ok || !d.image) throw new Error(d.error || 'mislukt');
+      setImpressie(d.image);
+    } catch { setImpErr('De AI-impressie is nu even niet beschikbaar. Probeer het zo nog eens of ga verder zonder impressie.'); }
+    setImpLoading(false);
+  };
 
   const handleSend = async () => {
     setLoading(true);
     try {
+      // Impressie (indien gemaakt) apart bewaren en met een token aan de aanvraag koppelen.
+      let impressieToken = null;
+      if (impressie) {
+        try {
+          const dr = await fetch('/api/designs', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ naam: `AI-impressie · ${form.naam || 'aanvraag'}`, data: { type: 'impressie', impressie, foto: photo, dienst: form.dienst, omvang: form.omvang } }) });
+          const dj = await dr.json(); if (dj && dj.ok) impressieToken = dj.token;
+        } catch { /* impressie is optioneel */ }
+      }
       await fetch('/api/leads', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           naam: form.naam, email: form.email, telefoon: form.telefoon,
           bron: 'contactformulier', tier: form.omvang,
-          note: [form.dienst && `Dienst: ${form.dienst}`, form.omvang && `Type tuin: ${form.omvang}`, form.bericht].filter(Boolean).join(' · '),
+          ontwerp: (impressieToken || form.dienst || form.omvang) ? { dienst: form.dienst, omvang: form.omvang, impressie_token: impressieToken } : null,
+          note: [form.dienst && `Dienst: ${form.dienst}`, form.omvang && `Type tuin: ${form.omvang}`, impressieToken && 'AI-impressie toegevoegd', form.bericht].filter(Boolean).join(' · '),
         }),
       });
       setSent(true);
@@ -1064,6 +1102,50 @@ export function ContactForm() {
             </div>
           )}
           {step === 2 && (
+            <div>
+              <p className="text-sm font-bold mb-1" style={{ color: NAVY }}>Wil je vast een AI-impressie zien?</p>
+              <p className="text-[12px] mb-4" style={{ color: MUTED }}>Upload of maak een foto van uw tuin, dan maakt onze AI er direct een sfeerbeeld van. Deze stap is optioneel.</p>
+              {!photo ? (
+                <div className="grid grid-cols-2 gap-2.5">
+                  <label className="flex flex-col items-center justify-center gap-1.5 py-6 rounded-xl border-2 border-dashed cursor-pointer transition-all hover:opacity-80" style={{ borderColor: LINE, background: LIGHT }}>
+                    <Upload className="w-6 h-6" style={{ color: BLUE }} /><span className="text-[11px] font-bold" style={{ color: MUTED }}>Foto uploaden</span>
+                    <input type="file" accept="image/*" className="hidden" onChange={onFoto} />
+                  </label>
+                  <label className="flex flex-col items-center justify-center gap-1.5 py-6 rounded-xl border-2 border-dashed cursor-pointer transition-all hover:opacity-80" style={{ borderColor: LINE, background: LIGHT }}>
+                    <Camera className="w-6 h-6" style={{ color: BLUE }} /><span className="text-[11px] font-bold" style={{ color: MUTED }}>Foto maken</span>
+                    <input type="file" accept="image/*" capture="environment" className="hidden" onChange={onFoto} />
+                  </label>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-wider mb-1.5" style={{ color: MUTED }}>Uw foto</p>
+                      <img src={photo} alt="uw tuin" className="w-full rounded-xl object-cover" style={{ maxHeight: 150, border: `1px solid ${LINE}` }} />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-wider mb-1.5" style={{ color: MUTED }}>AI-impressie</p>
+                      {impressie
+                        ? <img src={impressie} alt="AI-impressie" className="w-full rounded-xl object-cover" style={{ maxHeight: 150, border: `1px solid ${BLUE}` }} />
+                        : <div className="w-full rounded-xl flex items-center justify-center" style={{ height: 150, background: LIGHT, border: `1px dashed ${LINE}` }}>
+                            {impLoading
+                              ? <span className="w-6 h-6 border-2 rounded-full animate-spin" style={{ borderColor: 'rgba(11,157,70,0.25)', borderTopColor: BLUE }} />
+                              : <span className="text-[11px] px-3 text-center" style={{ color: MUTED }}>Nog geen impressie</span>}
+                          </div>}
+                    </div>
+                  </div>
+                  {impErr && <p className="text-[11px]" style={{ color: '#C0392B' }}>{impErr}</p>}
+                  <div className="flex gap-2">
+                    <button onClick={genImpressie} disabled={impLoading} className="flex-1 flex items-center justify-center gap-2 py-3 text-sm font-bold rounded-xl text-white transition-all hover:opacity-90 disabled:opacity-50" style={{ background: BLUE }}>
+                      {impLoading ? <><span className="w-4 h-4 border-2 rounded-full animate-spin" style={{ borderColor: 'rgba(255,255,255,0.4)', borderTopColor: WHITE }} /> Bezig…</> : impressie ? <><RefreshCw className="w-4 h-4" /> Opnieuw genereren</> : <><Sparkles className="w-4 h-4" /> Genereer AI-impressie</>}
+                    </button>
+                    <button onClick={() => { setPhoto(null); setImpressie(null); setImpErr(''); }} className="px-4 py-3 text-xs font-bold rounded-xl border transition-all" style={{ borderColor: LINE, color: MUTED }}>Andere foto</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+          {step === 3 && (
             <div className="space-y-2.5">
               <p className="text-sm font-bold mb-4" style={{ color: NAVY }}>Uw contactgegevens</p>
               {[{ k: 'naam', p: 'Naam *', t: 'text' }, { k: 'telefoon', p: 'Telefoonnummer *', t: 'tel' }, { k: 'email', p: 'E-mailadres', t: 'email' }].map(({ k, p, t }) => (

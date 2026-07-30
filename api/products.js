@@ -38,7 +38,7 @@ async function seedIfEmpty() {
 
 function withPrijs(p, uurtarief) {
   const prijs = Math.round(((p.inkoop || 0) + (p.uren || 0) * uurtarief) * 100) / 100;
-  return { ...p, actief: !!p.actief, prijs };
+  return { ...p, actief: !!p.actief, btw: p.btw != null ? p.btw : 21, prijs };
 }
 
 export default async function handler(req, res) {
@@ -64,17 +64,17 @@ export default async function handler(req, res) {
       if (!body.naam || !body.categorie) return res.status(400).json({ ok: false, error: 'naam en categorie verplicht' });
       const now = new Date().toISOString();
       const r = await db.exec(
-        'INSERT INTO products(categorie,naam,foto,inkoop,uren,eenheid,actief,sort,created) VALUES(?,?,?,?,?,?,?,?,?)',
+        'INSERT INTO products(categorie,naam,foto,inkoop,uren,eenheid,btw,actief,sort,created) VALUES(?,?,?,?,?,?,?,?,?,?)',
         [body.categorie, body.naam, body.foto || null, +body.inkoop || 0, +body.uren || 0, body.eenheid || 'm2',
-         body.actief === false ? 0 : 1, +body.sort || 0, now]);
+         body.btw != null ? +body.btw : 21, body.actief === false ? 0 : 1, +body.sort || 0, now]);
       return res.status(200).json({ ok: true, id: r.lastInsertRowid });
     }
     if (req.method === 'PUT') {
       const id = +body.id; if (!id) return res.status(400).json({ ok: false, error: 'id' });
       await db.exec(
-        'UPDATE products SET categorie=?,naam=?,foto=?,inkoop=?,uren=?,eenheid=?,actief=?,sort=? WHERE id=?',
+        'UPDATE products SET categorie=?,naam=?,foto=?,inkoop=?,uren=?,eenheid=?,btw=?,actief=?,sort=? WHERE id=?',
         [body.categorie, body.naam, body.foto || null, +body.inkoop || 0, +body.uren || 0, body.eenheid || 'm2',
-         body.actief === false ? 0 : 1, +body.sort || 0, id]);
+         body.btw != null ? +body.btw : 21, body.actief === false ? 0 : 1, +body.sort || 0, id]);
       return res.status(200).json({ ok: true });
     }
     if (req.method === 'DELETE') {

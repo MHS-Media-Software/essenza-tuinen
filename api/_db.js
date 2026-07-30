@@ -59,7 +59,7 @@ function ensureSchema() {
     { sql: `CREATE TABLE IF NOT EXISTS products (
       id INTEGER PRIMARY KEY AUTOINCREMENT, categorie TEXT NOT NULL, naam TEXT NOT NULL,
       foto TEXT, inkoop REAL DEFAULT 0, uren REAL DEFAULT 0, eenheid TEXT DEFAULT 'm2',
-      actief INTEGER DEFAULT 1, sort INTEGER DEFAULT 0, created TEXT )` },
+      btw REAL DEFAULT 21, actief INTEGER DEFAULT 1, sort INTEGER DEFAULT 0, created TEXT )` },
     { sql: `CREATE TABLE IF NOT EXISTS leads (
       id INTEGER PRIMARY KEY AUTOINCREMENT, created TEXT, naam TEXT, email TEXT, telefoon TEXT,
       bron TEXT, plaats TEXT, tuin_w REAL, tuin_d REAL, tier TEXT, ontwerp TEXT, richtprijs REAL,
@@ -83,7 +83,10 @@ function ensureSchema() {
       id INTEGER PRIMARY KEY AUTOINCREMENT, ref_type TEXT, ref_id INTEGER, aan TEXT, onderwerp TEXT,
       status TEXT, provider TEXT, fout TEXT, created TEXT )` },
     { sql: `CREATE TABLE IF NOT EXISTS settings ( key TEXT PRIMARY KEY, value TEXT )` },
-  ]).catch(e => { _schemaReady = null; throw e; });
+  ])
+    // Migraties (idempotent): kolommen die later zijn toegevoegd aan bestaande tabellen.
+    .then(() => run([{ sql: 'ALTER TABLE products ADD COLUMN btw REAL DEFAULT 21' }]).catch(() => {}))
+    .catch(e => { _schemaReady = null; throw e; });
   return _schemaReady;
 }
 
