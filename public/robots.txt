@@ -2,4 +2,4 @@ User-agent: *
 Allow: /
 Disallow: /admin
 
-Sitemap: https://essenzatuinen.nl/sitemap.xml
+Sitemap: https://www.essenzatuinen.nl/sitemap.xml
