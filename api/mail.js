@@ -3,6 +3,7 @@
 // teruggegeven zodat de beheerder de mail alsnog handmatig kan versturen.
 import * as db from './_db.js';
 import { getBedrijf, euro } from './_doc.js';
+import nodemailer from 'nodemailer';
 
 export default async function handler(req, res) {
   try {
@@ -33,8 +34,34 @@ export default async function handler(req, res) {
 
     const html = mailHtml({ bedrijf, naam, isQuote, doc, link });
     const key = process.env.RESEND_API_KEY;
-    const from = process.env.RESEND_FROM || `${bedrijf.naam} <onboarding@resend.dev>`;
+    const smtpHost = process.env.SMTP_HOST;
+    const from = process.env.SMTP_FROM || process.env.RESEND_FROM || (process.env.SMTP_USER ? `${bedrijf.naam} <${process.env.SMTP_USER}>` : `${bedrijf.naam} <onboarding@resend.dev>`);
     const now = new Date().toISOString();
+
+    async function markVerzonden(provider) {
+      await db.exec('INSERT INTO mails(ref_type,ref_id,aan,onderwerp,status,provider,created) VALUES(?,?,?,?,?,?,?)',
+        [type, id, aan, onderwerp, 'verzonden', provider, now]).catch(() => {});
+      if (isQuote && doc.status === 'concept') await db.exec("UPDATE quotes SET status='verzonden', updated=? WHERE id=?", [now, id]).catch(() => {});
+    }
+
+    // 1) SMTP (bv. Strato) heeft voorrang wanneer geconfigureerd.
+    if (smtpHost) {
+      const port = +(process.env.SMTP_PORT || 465);
+      const transporter = nodemailer.createTransport({
+        host: smtpHost, port, secure: port === 465,
+        auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+        connectionTimeout: 15000, greetingTimeout: 15000,
+      });
+      try {
+        await transporter.sendMail({ from, to: aan, subject: onderwerp, html, text: tekst });
+        await markVerzonden('smtp');
+        return res.status(200).json({ ok: true, sent: true, link });
+      } catch (e) {
+        await db.exec('INSERT INTO mails(ref_type,ref_id,aan,onderwerp,status,provider,fout,created) VALUES(?,?,?,?,?,?,?,?)',
+          [type, id, aan, onderwerp, 'mislukt', 'smtp', String(e.message || e).slice(0, 180), now]).catch(() => {});
+        return res.status(502).json({ ok: false, error: `Verzenden mislukt (SMTP): ${String(e.message || e).slice(0, 140)}` });
+      }
+    }
 
     if (key) {
       const r = await fetch('https://api.resend.com/emails', {

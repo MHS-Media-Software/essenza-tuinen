@@ -13,7 +13,7 @@ export default async function handler(req, res) {
         ok: true,
         uurtarief: Number(await db.getSetting('uurtarief', 55)) || 55,
         bedrijf,
-        mailProvider: process.env.RESEND_API_KEY ? 'resend' : null,
+        mailProvider: process.env.SMTP_HOST ? 'smtp' : (process.env.RESEND_API_KEY ? 'resend' : null),
       });
     }
     if (req.method === 'PUT') {
