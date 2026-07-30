@@ -1007,19 +1007,32 @@ function Ontwerper({ plotW, plotD, setPlot, cutCfg, items, setItems, sel, setSel
 // ── Isometrische 3D-weergave (per element realistisch, pure SVG) ─────────────
 function IsoView({ items, plotW, plotD, width, cutCfg }) {
   const s = Math.max(12, Math.min(width, 660) / (plotW + plotD) * 1.2);
-  const proj = (mx, my, z) => [(mx - my) * s, (mx + my) * s * 0.5 - z * s * 0.85];
+  const [rot, setRot] = useState(0);   // yaw: draaien om de verticale as (360°)
+  const [vy, setVy] = useState(0.5);   // kanteling: verticale compressie
+  const drag = useRef(null);
+  const cx0 = plotW / 2, cy0 = plotD / 2;
+  const cos = Math.cos(rot), sin = Math.sin(rot);
+  // Roteer (mx,my) om het midden en projecteer isometrisch; z = hoogte.
+  const proj = (mx, my, z) => {
+    const dx = mx - cx0, dy = my - cy0;
+    const rx = dx * cos - dy * sin, ry = dx * sin + dy * cos;
+    return [(rx - ry) * s, (rx + ry) * s * vy - z * s * 0.85];
+  };
   const P = (arr) => arr.map(p => `${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(' ');
 
   const grondPoly = lPolygon(plotW, plotD, cutCfg);
-  const pts = [];
-  grondPoly.forEach(c => pts.push(proj(c[0], c[1], 0)));
-  items.forEach(it => {
-    if (it.kind === 'shape') { it.points.forEach(p => pts.push(proj(p[0], p[1], 0), proj(p[0], p[1], 0.5))); return; }
-    const def = DEF[it.type]; const cx = it.x + it.w / 2, cy = it.y + it.d / 2; pts.push(proj(it.x, it.y, 0), proj(it.x + it.w, it.y + it.d, 0), proj(cx, cy, def.hz + (def.key === 'tuinhuis' || def.key === 'gebouw' ? 0.9 : 0)));
-  });
-  const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
-  const pad = 34;
-  const minX = Math.min(...xs) - pad, maxX = Math.max(...xs) + pad, minY = Math.min(...ys) - pad, maxY = Math.max(...ys) + pad;
+
+  // Stabiele viewBox op basis van de omschrijvende cirkel → geen "ademen" bij draaien.
+  const R = 0.5 * Math.hypot(plotW, plotD);
+  const maxZ = Math.max(1.2, ...items.map(it => (DEF[it.type] ? DEF[it.type].hz : 0) + (it.type === 'boom' ? 1.2 : 0)));
+  const diag = R * Math.SQRT2, pad = 40;
+  const halfX = diag * s + pad;
+  const minX = -halfX, maxX = halfX;
+  const minY = -(diag * s * vy + maxZ * s * 0.85) - pad, maxY = diag * s * vy + pad;
+
+  const onDown = (e) => { e.preventDefault(); drag.current = { x: e.clientX, y: e.clientY, rot, vy }; try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* */ } };
+  const onMove = (e) => { const d = drag.current; if (!d) return; setRot(d.rot + (e.clientX - d.x) * 0.01); setVy(clamp(d.vy - (e.clientY - d.y) * 0.003, 0.18, 0.82)); };
+  const onUp = () => { drag.current = null; };
 
   const drawShape = (it, k) => {
     const def = DEF[it.type]; const col = def.color; const els = []; let ki = 0; const key = () => `${k}-s-${ki++}`;
@@ -1130,17 +1143,27 @@ function IsoView({ items, plotW, plotD, width, cutCfg }) {
 
   const grond = grondPoly.map(c => proj(c[0], c[1], 0));
   const cr = cutRect(plotW, plotD, cutCfg);
-  const depthKey = (it) => { if (it.kind === 'shape') { const c = polyCentroid(it.points); return c[0] + c[1]; } return (it.x + it.w / 2) + (it.y + it.d / 2); };
+  const depthKey = (it) => {
+    let mx, my;
+    if (it.kind === 'shape') { const c = polyCentroid(it.points); mx = c[0]; my = c[1]; }
+    else { mx = it.x + it.w / 2; my = it.y + it.d / 2; }
+    const dx = mx - cx0, dy = my - cy0;
+    return (dx * sin + dy * cos) + (dx * cos - dy * sin); // rx+ry na rotatie = dieptesortering
+  };
   const sorted = [...items].sort((a, b) => depthKey(a) - depthKey(b));
 
   return (
-    <svg viewBox={`${minX} ${minY} ${maxX - minX} ${maxY - minY}`} className="my-4" style={{ width: '100%', maxWidth: Math.min(width + 140, 780), height: 'auto' }}>
+    <svg viewBox={`${minX} ${minY} ${maxX - minX} ${maxY - minY}`} className="my-4"
+      style={{ width: '100%', maxWidth: Math.min(width + 140, 780), height: 'auto', cursor: 'grab', touchAction: 'none' }}
+      onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerLeave={onUp}
+      onDoubleClick={() => { setRot(0); setVy(0.5); }}>
       <polygon points={P(grond)} fill="#CBDDB6" stroke={shade('#0B9D46', 0.8)} strokeWidth="1.5" />
       {cr && <polygon points={P([[cr.x0, cr.y0], [cr.x1, cr.y0], [cr.x1, cr.y1], [cr.x0, cr.y1]].map(p => proj(p[0], p[1], 0)))} fill="rgba(90,96,102,0.18)" stroke="rgba(90,96,102,0.4)" strokeWidth="1" strokeDasharray="3 3" />}
       {Array.from({ length: Math.floor(plotW) + 1 }).map((_, i) => { const a = proj(i, 0, 0), b = proj(i, plotD, 0); return <line key={'gx' + i} x1={a[0]} y1={a[1]} x2={b[0]} y2={b[1]} stroke="rgba(31,33,19,0.05)" strokeWidth="0.6" />; })}
       {Array.from({ length: Math.floor(plotD) + 1 }).map((_, i) => { const a = proj(0, i, 0), b = proj(plotW, i, 0); return <line key={'gy' + i} x1={a[0]} y1={a[1]} x2={b[0]} y2={b[1]} stroke="rgba(31,33,19,0.05)" strokeWidth="0.6" />; })}
       {sorted.map((it, k) => drawItem(it, k))}
-      {items.length === 0 && <text x={(minX + maxX) / 2} y={(minY + maxY) / 2} textAnchor="middle" fill="rgba(31,33,19,0.4)" fontSize={Math.max(11, s * 0.6)} fontWeight="600">Voeg elementen toe in de plattegrond</text>}
+      {items.length === 0 && <text x={0} y={0} textAnchor="middle" fill="rgba(31,33,19,0.4)" fontSize={Math.max(11, s * 0.6)} fontWeight="600">Voeg elementen toe in de plattegrond</text>}
+      <text x={0} y={maxY - 12} textAnchor="middle" fill="rgba(31,33,19,0.4)" fontSize={12} fontWeight="700">Sleep om te draaien · dubbelklik om te resetten</text>
     </svg>
   );
 }
