@@ -7,6 +7,7 @@ import EssenzaTuinenWerkwijze from './pages/EssenzaTuinenWerkwijze';
 import EssenzaTuinenOverOns from './pages/EssenzaTuinenOverOns';
 import EssenzaTuinenVacatures from './pages/EssenzaTuinenVacatures';
 import EssenzaTuinenContact from './pages/EssenzaTuinenContact';
+import EssenzaTuinenPrivacy from './pages/EssenzaTuinenPrivacy';
 import EssenzaTuinenConfigurator from './pages/EssenzaTuinenConfigurator';
 
 export default function App() {
@@ -21,6 +22,7 @@ export default function App() {
         <Route path="/over-ons" element={<EssenzaTuinenOverOns />} />
         <Route path="/vacatures" element={<EssenzaTuinenVacatures />} />
         <Route path="/contact" element={<EssenzaTuinenContact />} />
+        <Route path="/privacy" element={<EssenzaTuinenPrivacy />} />
         <Route path="/configurator" element={<EssenzaTuinenConfigurator />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

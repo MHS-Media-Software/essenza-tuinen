@@ -471,7 +471,7 @@ export function Footer() {
           </div>
         </div>
         <div className="pt-6 border-t flex flex-col sm:flex-row justify-between items-center gap-2" style={{ borderColor: LINE_D }}>
-          <p className="text-[11px]" style={{ color: 'rgba(255,255,255,0.35)' }}>© {new Date().getFullYear()} {NAAM} {NAAM2} · Alle rechten voorbehouden</p>
+          <p className="text-[11px]" style={{ color: 'rgba(255,255,255,0.35)' }}>© {new Date().getFullYear()} {NAAM} {NAAM2} · Alle rechten voorbehouden · <Link to={`${BASE}/privacy`} className="transition-colors hover:text-white" style={{ color: 'rgba(255,255,255,0.5)' }}>Privacyverklaring</Link></p>
           <p className="text-[11px]" style={{ color: 'rgba(255,255,255,0.35)' }}>Website gemaakt door <a href="https://mhsmedia.nl" target="_blank" rel="noopener noreferrer" className="font-bold transition-colors hover:text-white" style={{ color: 'rgba(255,255,255,0.55)' }}>MHS Media</a></p>
         </div>
       </div>
