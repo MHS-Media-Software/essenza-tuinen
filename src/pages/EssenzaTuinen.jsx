@@ -3,7 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowUpRight, ArrowRight, Phone, Mail, MapPin, Menu, X, ChevronDown, CheckCircle, Check,
-  PencilRuler, Shovel, Hammer, Droplets, Leaf, TreePine, Sparkles, Upload,
+  PencilRuler, Shovel, Hammer, Droplets, Leaf, TreePine, Sparkles, Upload, Wand2,
 } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import ConceptAdminBar from '../components/ConceptAdminBar';
@@ -386,12 +386,12 @@ export function Navbar({ solid = false }) {
         </div>
 
         <div className="hidden lg:flex items-center gap-3">
-          <a href={`tel:${TEL}`} className="flex items-center gap-1.5 text-sm font-semibold transition-colors hover:opacity-70" style={{ color: linkCol }}>
-            <Phone className="w-4 h-4" /> {TEL_TXT}
-          </a>
-          <Link to={`${BASE}/contact`} className="flex items-center gap-2 text-sm font-bold px-5 py-2.5 rounded-xl text-white transition-all hover:scale-105"
+          <Link to={`${BASE}/contact`} className="text-sm font-semibold transition-colors hover:opacity-70" style={{ color: linkCol }}>
+            Offerte aanvragen
+          </Link>
+          <Link to={`${BASE}/configurator`} className="flex items-center gap-2 text-sm font-bold px-5 py-2.5 rounded-xl text-white transition-all hover:scale-105"
             style={{ background: BLUE }}>
-            Offerte aanvragen <ArrowUpRight className="w-4 h-4" />
+            <Wand2 className="w-4 h-4" /> Ontwerp uw tuin in 3D
           </Link>
         </div>
 
@@ -408,7 +408,10 @@ export function Navbar({ solid = false }) {
               {[{ to: `${BASE}/diensten`, label: 'Diensten' }, ...NAV].map((n) => (
                 <Link key={n.to} to={n.to} onClick={() => setOpen(false)} className="block py-3 text-sm font-semibold border-b" style={{ color: INK, borderColor: LINE }}>{n.label}</Link>
               ))}
-              <Link to={`${BASE}/contact`} onClick={() => setOpen(false)} className="block text-center py-3 mt-3 text-sm font-bold text-white rounded-xl" style={{ background: BLUE }}>
+              <Link to={`${BASE}/configurator`} onClick={() => setOpen(false)} className="flex items-center justify-center gap-2 py-3 mt-3 text-sm font-bold text-white rounded-xl" style={{ background: BLUE }}>
+                <Wand2 className="w-4 h-4" /> Ontwerp uw tuin in 3D
+              </Link>
+              <Link to={`${BASE}/contact`} onClick={() => setOpen(false)} className="block text-center py-3 text-sm font-bold rounded-xl" style={{ border: `1px solid ${LINE}`, color: NAVY }}>
                 Offerte aanvragen →
               </Link>
             </div>
@@ -469,7 +472,7 @@ export function Footer() {
         </div>
         <div className="pt-6 border-t flex flex-col sm:flex-row justify-between items-center gap-2" style={{ borderColor: LINE_D }}>
           <p className="text-[11px]" style={{ color: 'rgba(255,255,255,0.35)' }}>© {new Date().getFullYear()} {NAAM} {NAAM2} · Alle rechten voorbehouden</p>
-          <p className="text-[11px]" style={{ color: 'rgba(255,255,255,0.35)' }}>Website gemaakt door <span className="font-bold" style={{ color: 'rgba(255,255,255,0.55)' }}>MHS Media</span></p>
+          <p className="text-[11px]" style={{ color: 'rgba(255,255,255,0.35)' }}>Website gemaakt door <a href="https://mhsmedia.nl" target="_blank" rel="noopener noreferrer" className="font-bold transition-colors hover:text-white" style={{ color: 'rgba(255,255,255,0.55)' }}>MHS Media</a></p>
         </div>
       </div>
     </footer>
@@ -988,48 +991,19 @@ export function ContactForm() {
   });
   const [sent, setSent] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [foto, setFoto] = useState(null);
-  const [viz, setViz] = useState(null);
-  const [vizLoad, setVizLoad] = useState(false);
-  const [vizErr, setVizErr] = useState('');
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
-  const steps = ['Dienst', 'Uw tuin', 'Visualisatie', 'Gegevens'];
+  const steps = ['Dienst', 'Uw tuin', 'Gegevens'];
   const last = steps.length - 1;
-
-  const onFoto = async (e) => {
-    const f = e.target.files?.[0]; if (!f) return;
-    setVizErr(''); setViz(null);
-    try { setFoto(await fileToDataUrl(f)); } catch { setVizErr('Kon de foto niet laden.'); }
-  };
-  const genViz = async () => {
-    if (!foto) return;
-    setVizLoad(true); setVizErr('');
-    try {
-      const r = await fetch('/api/visualize', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageDataUrl: foto, dienst: form.dienst, omschrijving: form.bericht }),
-      });
-      const d = await r.json();
-      if (!d.ok || !d.resultImage) throw new Error(d.error || 'mislukt');
-      setViz(d);
-    } catch { setVizErr('De visualisatie is even niet beschikbaar. Probeer het zo nog eens of vraag direct een offerte aan.'); }
-    setVizLoad(false);
-  };
-
-  const euro = (n) => (typeof n === 'number' ? '€ ' + n.toLocaleString('nl-NL') : '');
 
   const handleSend = async () => {
     setLoading(true);
     try {
-      const k = viz?.kosten;
       await fetch('/api/leads', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           naam: form.naam, email: form.email, telefoon: form.telefoon,
           bron: 'contactformulier', tier: form.omvang,
-          richtprijs: (k && k.min) ? k.min : null,
-          note: [form.dienst && `Dienst: ${form.dienst}`, form.omvang && `Type tuin: ${form.omvang}`, form.bericht,
-                 (k && k.min) ? `AI-inschatting: € ${k.min} - € ${k.max}` : null].filter(Boolean).join(' · '),
+          note: [form.dienst && `Dienst: ${form.dienst}`, form.omvang && `Type tuin: ${form.omvang}`, form.bericht].filter(Boolean).join(' · '),
         }),
       });
       setSent(true);
@@ -1093,43 +1067,6 @@ export function ContactForm() {
             </div>
           )}
           {step === 2 && (
-            <div className="space-y-3">
-              <p className="text-sm font-bold" style={{ color: NAVY }}>Zie uw nieuwe tuin — met AI</p>
-              <p className="text-xs" style={{ color: MUTED }}>Upload een foto van uw huidige tuin. Wij tonen direct een indruk van het resultaat + een kosteninschatting.</p>
-              {!viz && (
-                <>
-                  <label className="flex flex-col items-center justify-center gap-2 py-8 rounded-2xl border-2 border-dashed cursor-pointer transition-all hover:bg-gray-50" style={{ borderColor: LINE, background: LIGHT }}>
-                    {foto ? <img src={foto} alt="uw tuin" className="max-h-40 rounded-xl" /> : <><Upload className="w-6 h-6" style={{ color: BLUE }} /><span className="text-xs font-semibold" style={{ color: MUTED }}>Foto van uw tuin uploaden</span></>}
-                    <input type="file" accept="image/*" className="hidden" onChange={onFoto} />
-                  </label>
-                  {foto && (
-                    <button onClick={genViz} disabled={vizLoad} className="w-full flex items-center justify-center gap-2 py-3.5 text-sm font-bold rounded-xl text-white transition-all hover:opacity-90 disabled:opacity-50" style={{ background: BLUE }}>
-                      {vizLoad ? <><span className="w-4 h-4 border-2 rounded-full animate-spin" style={{ borderColor: 'rgba(255,255,255,0.4)', borderTopColor: WHITE }} /> Visualisatie maken…</> : <><Sparkles className="w-4 h-4" /> Genereer visualisatie</>}
-                    </button>
-                  )}
-                  {vizErr && <p className="text-xs" style={{ color: '#C0392B' }}>{vizErr}</p>}
-                </>
-              )}
-              {viz && (
-                <div className="space-y-3">
-                  <div className="grid grid-cols-2 gap-2">
-                    <div><p className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: MUTED }}>Nu</p><img src={foto} alt="voor" className="w-full rounded-xl" /></div>
-                    <div><p className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: BLUE }}>Straks (AI-indruk)</p><img src={viz.resultImage} alt="na" className="w-full rounded-xl" /></div>
-                  </div>
-                  {viz.kosten && viz.kosten.min != null && (
-                    <div className="p-4 rounded-2xl" style={{ background: SOFT }}>
-                      <p className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: MUTED }}>Kosteninschatting (indicatief)</p>
-                      <p className="font-bold text-lg" style={{ fontFamily: FONT_H, color: NAVY }}>{euro(viz.kosten.min)} – {euro(viz.kosten.max)}</p>
-                      {viz.kosten.toelichting && <p className="text-xs mt-1" style={{ color: MUTED }}>{viz.kosten.toelichting}</p>}
-                    </div>
-                  )}
-                  <p className="text-[11px]" style={{ color: MUTED }}>Dit is een AI-indruk en een ruwe inschatting. Voor een exacte prijs maken wij een offerte op maat.</p>
-                  <button onClick={() => { setViz(null); setFoto(null); }} className="text-xs font-semibold underline" style={{ color: MUTED }}>Andere foto proberen</button>
-                </div>
-              )}
-            </div>
-          )}
-          {step === 3 && (
             <div className="space-y-2.5">
               <p className="text-sm font-bold mb-4" style={{ color: NAVY }}>Uw contactgegevens</p>
               {[{ k: 'naam', p: 'Naam *', t: 'text' }, { k: 'telefoon', p: 'Telefoonnummer *', t: 'tel' }, { k: 'email', p: 'E-mailadres', t: 'email' }].map(({ k, p, t }) => (
@@ -1147,7 +1084,7 @@ export function ContactForm() {
         {step < last ? (
           <button onClick={() => setStep(s => s + 1)} disabled={step === 0 && !form.dienst}
             className="flex-1 py-3.5 text-sm font-bold rounded-xl text-white transition-all hover:opacity-90 disabled:opacity-30" style={{ background: BLUE }}>
-            {step === 2 && viz ? 'Ontvang echte prijs + offerte →' : step === 2 ? 'Overslaan →' : 'Volgende →'}
+            Volgende →
           </button>
         ) : (
           <button onClick={handleSend} disabled={!form.naam || !form.telefoon || loading}
@@ -1158,6 +1095,9 @@ export function ContactForm() {
           </button>
         )}
       </div>
+      <Link to={`${BASE}/configurator`} className="mt-4 flex items-center justify-center gap-1.5 text-xs font-bold transition-opacity hover:opacity-70" style={{ color: BLUE }}>
+        <Sparkles className="w-3.5 h-3.5" /> Liever zelf ontwerpen? Open de 3D-tuinconfigurator →
+      </Link>
     </div>
   );
 }

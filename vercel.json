@@ -5,7 +5,8 @@
   "outputDirectory": "dist",
   "trailingSlash": false,
   "functions": {
-    "api/render.js": { "maxDuration": 60 }
+    "api/render.js": { "maxDuration": 300 },
+    "api/mail.js": { "maxDuration": 30 }
   },
   "redirects": [
     { "source": "/essenza-tuinen", "destination": "/", "permanent": false },

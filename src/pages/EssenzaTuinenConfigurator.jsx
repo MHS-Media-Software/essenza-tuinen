@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowUpRight, ArrowRight, Search, Trash2, RotateCcw, Map as MapIcon, Box, Wand2, Upload, Download, Save, User as UserIcon, LogIn, Copy, FolderOpen,
-  CheckCircle, Check, Plus, Phone, MapPin, Info, Sparkles, X,
+  CheckCircle, Check, Plus, Phone, MapPin, Info, Sparkles, X, Camera,
   Grid2x2, Sprout, Flower2, Rows3, Waves, Droplets, Fence, Columns3, TreePine, Warehouse, Building2, Square, PenTool,
 } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
@@ -978,10 +978,22 @@ function Ontwerper({ plotW, plotD, setPlot, cutCfg, items, setItems, sel, setSel
                       </div>
                       <div>
                         <p className="text-[11px] font-bold uppercase tracking-[0.2em] mb-2" style={{ color: MUTED }}>Huidige tuin (optioneel)</p>
-                        <label className="flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed cursor-pointer transition-all overflow-hidden" style={{ borderColor: photo ? BLUE : LINE, background: LIGHT, minHeight: 132 }}>
-                          {photo ? <img src={photo} alt="uw tuin" className="w-full h-full object-cover" style={{ maxHeight: 160 }} /> : <><Upload className="w-6 h-6" style={{ color: BLUE }} /><span className="text-xs font-semibold px-3 text-center" style={{ color: MUTED }}>Foto van uw tuin uploaden</span></>}
-                          <input type="file" accept="image/*" className="hidden" onChange={onFoto} />
-                        </label>
+                        {photo ? (
+                          <div className="rounded-xl overflow-hidden" style={{ border: `1px solid ${BLUE}` }}>
+                            <img src={photo} alt="uw tuin" className="w-full object-cover" style={{ maxHeight: 160 }} />
+                          </div>
+                        ) : (
+                          <div className="grid grid-cols-2 gap-2" style={{ minHeight: 132 }}>
+                            <label className="flex flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed cursor-pointer transition-all hover:scale-[1.02]" style={{ borderColor: LINE, background: LIGHT }}>
+                              <Upload className="w-6 h-6" style={{ color: BLUE }} /><span className="text-[11px] font-bold text-center px-2" style={{ color: MUTED }}>Foto uploaden</span>
+                              <input type="file" accept="image/*" className="hidden" onChange={onFoto} />
+                            </label>
+                            <label className="flex flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed cursor-pointer transition-all hover:scale-[1.02]" style={{ borderColor: LINE, background: LIGHT }}>
+                              <Camera className="w-6 h-6" style={{ color: BLUE }} /><span className="text-[11px] font-bold text-center px-2" style={{ color: MUTED }}>Foto maken</span>
+                              <input type="file" accept="image/*" capture="environment" className="hidden" onChange={onFoto} />
+                            </label>
+                          </div>
+                        )}
                         {photo && <button onClick={() => setPhoto(null)} className="text-[11px] font-semibold underline mt-1.5" style={{ color: MUTED }}>Foto verwijderen</button>}
                       </div>
                     </div>
