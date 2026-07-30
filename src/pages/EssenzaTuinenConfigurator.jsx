@@ -19,7 +19,7 @@ function Layout({ children }) {
     <div style={{ fontFamily: FONT_B, background: WHITE, minHeight: '100vh' }}>
       <header className="sticky top-0 z-50" style={{ background: WHITE, borderBottom: `1px solid ${LINE}` }}>
         <div className="max-w-6xl mx-auto px-6 flex items-center justify-between" style={{ height: 68 }}>
-          <Link to={BASE} className="flex items-center gap-2.5">
+          <Link to={BASE || '/'} className="flex items-center gap-2.5">
             {BRAND.logo
               ? <img src={BRAND.logo} alt={BRAND.volledig} style={{ height: 34, objectFit: 'contain' }} />
               : (<>
@@ -27,7 +27,7 @@ function Layout({ children }) {
                   <p className="font-extrabold text-lg" style={{ fontFamily: FONT_H, color: NAVY }}>{BRAND.naam} <span style={{ color: BLUE }}>{BRAND.naam2}</span></p>
                 </>)}
           </Link>
-          <Link to={BASE} className="text-sm font-bold inline-flex items-center gap-1.5" style={{ color: BLUE }}>Terug naar de website</Link>
+          <Link to={BASE || '/'} className="text-sm font-bold inline-flex items-center gap-1.5" style={{ color: BLUE }}>Terug naar de website</Link>
         </div>
       </header>
       {children}

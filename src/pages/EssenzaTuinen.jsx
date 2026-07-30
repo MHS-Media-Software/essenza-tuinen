@@ -35,7 +35,8 @@ const TEL     = '+31621448790';
 const TEL_TXT = '06 21 44 87 90';
 const WHATSAPP = '31621448790';
 const WERKGEBIED = 'Zeeland & West-Brabant';
-export const BASE = '/essenza-tuinen';
+// Standalone app draait op de root ('' ); in de concepts-repo onder /essenza-tuinen.
+export const BASE = (typeof window !== 'undefined' && window.__ESSENZA_ROOT__) ? '' : '/essenza-tuinen';
 
 const IMG = {
   hero:  '/generated/essenza-tuinen/hero.png',
@@ -315,7 +316,7 @@ export function Navbar({ solid = false }) {
         fontFamily: FONT_B,
       }}>
       <div className="max-w-7xl mx-auto px-6 md:px-8 flex items-center justify-between" style={{ height: 76 }}>
-        <Link to={BASE} className="flex items-center gap-3">
+        <Link to={BASE || '/'} className="flex items-center gap-3">
           {LOGO ? (
             <img src={isSolid ? LOGO : (LOGO_WHITE || LOGO)} alt={`${NAAM} ${NAAM2}`} className="object-contain"
               style={{ height: 58, maxWidth: 240 }} />
@@ -425,7 +426,7 @@ export function Footer() {
       <div className="max-w-7xl mx-auto px-6 md:px-8 pt-16 pb-10">
         <div className="grid md:grid-cols-12 gap-10 mb-12">
           <div className="md:col-span-4">
-            <Link to={BASE} className="inline-flex items-center mb-5">
+            <Link to={BASE || '/'} className="inline-flex items-center mb-5">
               {LOGO ? (
                 <img src={LOGO_WHITE || LOGO} alt={`${NAAM} ${NAAM2}`} className="object-contain" style={{ height: 66, maxWidth: 260 }} />
               ) : (
