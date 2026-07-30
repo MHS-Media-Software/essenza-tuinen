@@ -12,7 +12,6 @@
   <url><loc>https://www.essenzatuinen.nl/werkwijze</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
   <url><loc>https://www.essenzatuinen.nl/over-ons</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
   <url><loc>https://www.essenzatuinen.nl/vacatures</loc><changefreq>weekly</changefreq><priority>0.7</priority></url>
-  <url><loc>https://www.essenzatuinen.nl/configurator</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
   <url><loc>https://www.essenzatuinen.nl/contact</loc><changefreq>yearly</changefreq><priority>0.6</priority></url>
   <url><loc>https://www.essenzatuinen.nl/privacy</loc><changefreq>yearly</changefreq><priority>0.3</priority></url>
 </urlset>

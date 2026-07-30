@@ -3,7 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowUpRight, ArrowRight, Phone, Mail, MapPin, Menu, X, ChevronDown, CheckCircle, Check,
-  PencilRuler, Shovel, Hammer, Droplets, Leaf, TreePine, Sparkles, Upload, Wand2,
+  PencilRuler, Shovel, Hammer, Droplets, Leaf, TreePine,
 } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import ConceptAdminBar from '../components/ConceptAdminBar';
@@ -386,12 +386,12 @@ export function Navbar({ solid = false }) {
         </div>
 
         <div className="hidden lg:flex items-center gap-3">
-          <Link to={`${BASE}/contact`} className="text-sm font-semibold transition-colors hover:opacity-70" style={{ color: linkCol }}>
-            Offerte aanvragen
-          </Link>
-          <Link to={`${BASE}/configurator`} className="flex items-center gap-2 text-sm font-bold px-5 py-2.5 rounded-xl text-white transition-all hover:scale-105"
+          <a href={`tel:${TEL}`} className="flex items-center gap-1.5 text-sm font-semibold transition-colors hover:opacity-70" style={{ color: linkCol }}>
+            <Phone className="w-4 h-4" /> {TEL_TXT}
+          </a>
+          <Link to={`${BASE}/contact`} className="flex items-center gap-2 text-sm font-bold px-5 py-2.5 rounded-xl text-white transition-all hover:scale-105"
             style={{ background: BLUE }}>
-            <Wand2 className="w-4 h-4" /> Ontwerp uw tuin in 3D
+            Offerte aanvragen <ArrowUpRight className="w-4 h-4" />
           </Link>
         </div>
 
@@ -408,10 +408,7 @@ export function Navbar({ solid = false }) {
               {[{ to: `${BASE}/diensten`, label: 'Diensten' }, ...NAV].map((n) => (
                 <Link key={n.to} to={n.to} onClick={() => setOpen(false)} className="block py-3 text-sm font-semibold border-b" style={{ color: INK, borderColor: LINE }}>{n.label}</Link>
               ))}
-              <Link to={`${BASE}/configurator`} onClick={() => setOpen(false)} className="flex items-center justify-center gap-2 py-3 mt-3 text-sm font-bold text-white rounded-xl" style={{ background: BLUE }}>
-                <Wand2 className="w-4 h-4" /> Ontwerp uw tuin in 3D
-              </Link>
-              <Link to={`${BASE}/contact`} onClick={() => setOpen(false)} className="block text-center py-3 text-sm font-bold rounded-xl" style={{ border: `1px solid ${LINE}`, color: NAVY }}>
+              <Link to={`${BASE}/contact`} onClick={() => setOpen(false)} className="block text-center py-3 mt-3 text-sm font-bold text-white rounded-xl" style={{ background: BLUE }}>
                 Offerte aanvragen →
               </Link>
             </div>
@@ -1095,9 +1092,6 @@ export function ContactForm() {
           </button>
         )}
       </div>
-      <Link to={`${BASE}/configurator`} className="mt-4 flex items-center justify-center gap-1.5 text-xs font-bold transition-opacity hover:opacity-70" style={{ color: BLUE }}>
-        <Sparkles className="w-3.5 h-3.5" /> Liever zelf ontwerpen? Open de 3D-tuinconfigurator →
-      </Link>
     </div>
   );
 }
