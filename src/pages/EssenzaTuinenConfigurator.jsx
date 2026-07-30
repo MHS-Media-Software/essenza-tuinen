@@ -7,34 +7,10 @@ import {
   Grid2x2, Sprout, Flower2, Rows3, Waves, Droplets, Fence, Columns3, TreePine, Warehouse, Building2, Square, PenTool,
 } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
-import { BRAND, Footer, BASE } from './EssenzaTuinen';
+import { BRAND, BASE, Layout } from './EssenzaTuinen';
 
 const { NAVY, BLUE, BLUE_D, SOFT, LIGHT, WHITE, INK, MUTED, LINE, LINE_D, FONT_H, FONT_B } = BRAND;
 const MINT = BRAND.MINT || BLUE;
-
-// Eenvoudige layout: vaste kop met logo + terug-link, en de Hoveniers-footer eronder.
-// (De configurator is een losse, volledige pagina.)
-function Layout({ children }) {
-  return (
-    <div style={{ fontFamily: FONT_B, background: WHITE, minHeight: '100vh' }}>
-      <header className="sticky top-0 z-50" style={{ background: WHITE, borderBottom: `1px solid ${LINE}` }}>
-        <div className="max-w-6xl mx-auto px-6 flex items-center justify-between" style={{ height: 68 }}>
-          <Link to={BASE || '/'} className="flex items-center gap-2.5">
-            {BRAND.logo
-              ? <img src={BRAND.logo} alt={BRAND.volledig} style={{ height: 34, objectFit: 'contain' }} />
-              : (<>
-                  <div className="w-9 h-9 rounded-xl flex items-center justify-center font-black text-sm" style={{ background: BLUE, color: WHITE, fontFamily: FONT_H }}>{(BRAND.naam || 'H').slice(0, 2).toUpperCase()}</div>
-                  <p className="font-extrabold text-lg" style={{ fontFamily: FONT_H, color: NAVY }}>{BRAND.naam} <span style={{ color: BLUE }}>{BRAND.naam2}</span></p>
-                </>)}
-          </Link>
-          <Link to={BASE || '/'} className="text-sm font-bold inline-flex items-center gap-1.5" style={{ color: BLUE }}>Terug naar de website</Link>
-        </div>
-      </header>
-      {children}
-      <Footer />
-    </div>
-  );
-}
 
 // ── Tuinelementen (footprint + prijs per tier + icoon) ───────────────────────
 const ELEMENTS = [
@@ -476,7 +452,7 @@ export default function HoverniersConfigurator() {
   const netArea = Math.round(plotW * plotD - (_cr ? (_cr.x1 - _cr.x0) * (_cr.y1 - _cr.y0) : 0));
 
   return (
-    <Layout solidNav>
+    <Layout>
       <div style={{ background: LIGHT, fontFamily: FONT_B }}>
         <section className="pt-28 pb-8" style={{ background: NAVY }}>
           <div className="max-w-7xl mx-auto px-6 md:px-8">
