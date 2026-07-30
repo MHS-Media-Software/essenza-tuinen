@@ -57,11 +57,6 @@ const TIERS = [
   { key: 'standaard', label: 'Standaard', sub: 'De gulden middenweg' },
   { key: 'premium',   label: 'Premium',   sub: 'Hoogwaardig maatwerk' },
 ];
-const PRESETS = [
-  { label: 'Klein', w: 8, d: 10 },
-  { label: 'Normaal', w: 12, d: 15 },
-  { label: 'Groot', w: 20, d: 25 },
-];
 
 const euro = (n) => '€ ' + Math.round(n).toLocaleString('nl-NL');
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -422,7 +417,7 @@ export default function HoverniersConfigurator() {
   };
   const logout = async () => { await fetch('/api/account', { method: 'DELETE' }); setAccount({ authed: false, email: null }); };
 
-  const stappen = ['Uw kavel', 'Ontwerp', 'Offerte'];
+  const stappen = ['Afmetingen', 'Ontwerp', 'Offerte'];
 
   const zoekKavel = async () => {
     if (!postcode.trim()) { setZoekErr('Vul uw postcode in.'); return; }
@@ -487,7 +482,7 @@ export default function HoverniersConfigurator() {
           <div className="max-w-7xl mx-auto px-6 md:px-8">
             <p className="text-[11px] font-bold uppercase tracking-[0.3em] mb-2" style={{ color: MINT }}>Ontwerp je eigen tuin</p>
             <h1 className="font-semibold text-white mb-2" style={{ fontFamily: FONT_H, fontSize: 'clamp(1.5rem, 2.8vw, 2.2rem)', letterSpacing: '-0.02em' }}>De 3D-tuinconfigurator</h1>
-            <p className="text-[15px] max-w-2xl" style={{ color: 'rgba(255,255,255,0.72)' }}>Bepaal uw kavel, sleep tuinelementen op de plattegrond, bekijk uw tuin in 3D en breng het ontwerp met AI tot leven. U ontvangt direct een prijsindicatie op maat.</p>
+            <p className="text-[15px] max-w-2xl" style={{ color: 'rgba(255,255,255,0.72)' }}>Bepaal de afmetingen, sleep tuinelementen op de plattegrond, bekijk uw tuin in 3D en breng het ontwerp met AI tot leven. U ontvangt direct een prijsindicatie op maat.</p>
             <div className="flex items-center gap-0 mt-7 max-w-lg">
               {stappen.map((s, i) => (
                 <React.Fragment key={s}>
@@ -510,37 +505,10 @@ export default function HoverniersConfigurator() {
             <AnimatePresence mode="wait">
               {step === 0 && (
                 <motion.div key="kavel" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.25 }}
-                  className="grid lg:grid-cols-2 gap-8 items-start">
-                  <div className="p-7 md:p-9 rounded-3xl" style={{ background: WHITE, border: `1px solid ${LINE}` }}>
-                    <div className="w-12 h-12 rounded-2xl flex items-center justify-center mb-5" style={{ background: SOFT }}><MapPin className="w-5 h-5" style={{ color: BLUE }} /></div>
-                    <h2 className="font-semibold mb-2" style={{ fontFamily: FONT_H, color: NAVY, fontSize: '1.3rem' }}>Waar ligt uw tuin?</h2>
-                    <p className="text-sm leading-relaxed mb-6" style={{ color: MUTED }}>Vul uw postcode en huisnummer in. Wij halen uw adres op via het Kadaster en u bevestigt de afmetingen.</p>
-                    <div className="grid grid-cols-3 gap-3 mb-3">
-                      <input value={postcode} onChange={e => setPostcode(e.target.value)} placeholder="Postcode" className="col-span-2 px-4 py-3.5 text-sm rounded-xl border outline-none" style={{ borderColor: LINE, background: WHITE, color: INK }} />
-                      <input value={huisnr} onChange={e => setHuisnr(e.target.value)} placeholder="Nr." className="px-4 py-3.5 text-sm rounded-xl border outline-none" style={{ borderColor: LINE, background: WHITE, color: INK }} />
-                    </div>
-                    <button onClick={zoekKavel} disabled={zoekLoad} className="w-full flex items-center justify-center gap-2 py-3.5 text-sm font-bold rounded-xl text-white transition-all hover:opacity-90 disabled:opacity-50" style={{ background: BLUE }}>
-                      {zoekLoad ? <><span className="w-4 h-4 border-2 rounded-full animate-spin" style={{ borderColor: 'rgba(255,255,255,0.4)', borderTopColor: WHITE }} /> Zoeken…</> : <><Search className="w-4 h-4" /> Zoek mijn kavel</>}
-                    </button>
-                    {zoekErr && <p className="text-xs mt-3" style={{ color: '#C0392B' }}>{zoekErr}</p>}
-                    {adres && (
-                      <div className="mt-4 p-4 rounded-2xl flex items-start gap-3" style={{ background: SOFT }}>
-                        <CheckCircle className="w-5 h-5 flex-shrink-0 mt-0.5" style={{ color: BLUE }} />
-                        <div><p className="text-sm font-bold" style={{ color: NAVY }}>{adres.naam}</p><p className="text-xs" style={{ color: MUTED }}>{adres.gemeente ? `Gemeente ${adres.gemeente} · ` : ''}kavel gevonden</p></div>
-                      </div>
-                    )}
-                    <div className="flex items-start gap-2 mt-5 text-[11px]" style={{ color: MUTED }}><Info className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" /> Adres via het Kadaster / PDOK. De exacte perceelgrenzen bevestigen wij bij de schouw.</div>
-                  </div>
-
+                  className="max-w-2xl mx-auto">
                   <div className="p-7 md:p-9 rounded-3xl" style={{ background: WHITE, border: `1px solid ${LINE}` }}>
                     <h2 className="font-semibold mb-2" style={{ fontFamily: FONT_H, color: NAVY, fontSize: '1.3rem' }}>Afmetingen van de tuin</h2>
-                    <p className="text-sm leading-relaxed mb-5" style={{ color: MUTED }}>Kies een formaat of vul de exacte maten in. U kunt dit tijdens het ontwerpen altijd nog aanpassen.</p>
-                    <div className="flex flex-wrap gap-2 mb-5">
-                      {PRESETS.map(p => (
-                        <button key={p.label} onClick={() => setPlot(p.w, p.d)} className="px-4 py-2 rounded-full text-xs font-bold transition-all"
-                          style={plotW === p.w && plotD === p.d ? { background: BLUE, color: WHITE } : { background: LIGHT, color: MUTED, border: `1px solid ${LINE}` }}>{p.label} · {p.w}×{p.d}m</button>
-                      ))}
-                    </div>
+                    <p className="text-sm leading-relaxed mb-5" style={{ color: MUTED }}>Vul de exacte maten in. U kunt dit tijdens het ontwerpen altijd nog aanpassen.</p>
                     <div className="grid grid-cols-2 gap-4 mb-6">
                       <label className="block"><span className="text-[11px] font-bold uppercase tracking-[0.2em]" style={{ color: MUTED }}>Breedte (m)</span>
                         <DimInput value={plotW} onCommit={v => setPlot(v, plotD)} className="w-full mt-1.5 px-4 py-3 text-sm rounded-xl border outline-none" style={{ borderColor: LINE, background: WHITE, color: INK }} /></label>
@@ -952,7 +920,7 @@ function Ontwerper({ plotW, plotD, setPlot, cutCfg, items, setItems, sel, setSel
           </div>
           <button onClick={openAI} disabled={items.length === 0} className="w-full flex items-center justify-center gap-2 py-3 mb-2 text-sm font-bold rounded-xl transition-all hover:scale-[1.02] disabled:opacity-30" style={{ background: SOFT, color: BLUE_D }}><Wand2 className="w-4 h-4" /> Breng tot leven met AI</button>
           <button onClick={onVerder} disabled={items.length === 0} className="w-full flex items-center justify-center gap-2 py-3.5 text-sm font-bold rounded-xl text-white transition-all hover:scale-[1.02] disabled:opacity-30" style={{ background: BLUE }}>Vraag offerte aan <ArrowUpRight className="w-4 h-4" /></button>
-          <button onClick={onTerug} className="w-full mt-2 py-2.5 text-xs font-bold rounded-xl transition-all" style={{ color: MUTED }}>← Terug naar kavel</button>
+          <button onClick={onTerug} className="w-full mt-2 py-2.5 text-xs font-bold rounded-xl transition-all" style={{ color: MUTED }}>← Terug naar afmetingen</button>
         </div>
       </div>
 
