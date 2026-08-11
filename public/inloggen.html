@@ -8,73 +8,134 @@
   <link rel="icon" type="image/png" href="/favicon.png" />
   <script src="https://cdn.tailwindcss.com"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@600;700;800&display=swap" rel="stylesheet">
   <style>
-    body{font-family:'Inter',sans-serif;color:#1F2113;background:linear-gradient(135deg,#1F2113,#2C3019);min-height:100vh}
+    body{font-family:'Inter',-apple-system,sans-serif}
     .font-h{font-family:'Poppins',sans-serif}
     [x-cloak]{display:none!important}
-    .card{background:#fff;border-radius:1.1rem;box-shadow:0 18px 50px rgba(0,0,0,.28)}
-    .inp{width:100%;padding:.7rem .85rem;border:1px solid #E6E8DC;border-radius:.65rem;font-size:.95rem;outline:none;background:#fff}
-    .inp:focus{border-color:#0B9D46;box-shadow:0 0 0 3px rgba(11,157,70,.12)}
-    .lbl{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#6B7060}
-    .btn{display:inline-flex;align-items:center;justify-content:center;gap:.4rem;font-weight:700;border-radius:.7rem;transition:all .15s;font-size:.9rem;cursor:pointer;width:100%;padding:.75rem 1.1rem}
-    .btn-primary{background:#0B9D46;color:#fff}.btn-primary:hover{background:#087A37}
-    .btn-primary:disabled{opacity:.6;cursor:default}
-    .melding{font-size:.82rem;padding:.6rem .75rem;border-radius:.55rem;background:#fbe4e4;color:#8d2b20}
+    .et-merk{background:
+      radial-gradient(900px 520px at 18% 12%,rgba(11,157,70,.42) 0%,transparent 55%),
+      radial-gradient(760px 520px at 85% 95%,rgba(143,217,168,.20) 0%,transparent 60%),
+      linear-gradient(135deg,#2C3019 0%,#1F2113 58%,#141609 100%)}
+    .et-kaart{animation:etIn .5s cubic-bezier(.2,.8,.2,1)}
+    @keyframes etIn{0%{transform:translateY(16px);opacity:0}100%{transform:translateY(0);opacity:1}}
+    .et-in{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.10);color:#fff}
+    .et-in::placeholder{color:rgba(255,255,255,.30)}
+    .et-in:focus{outline:none;border-color:transparent;box-shadow:0 0 0 2px rgba(11,157,70,.6)}
+    .et-in:disabled{color:rgba(255,255,255,.55)}
+    .et-btn{background:linear-gradient(135deg,#0B9D46,#087A37);transition:filter .15s,transform .05s}
+    .et-btn:hover{filter:brightness(1.1)}.et-btn:active{transform:scale(.99)}
+    .et-btn:disabled{opacity:.6;cursor:default}
+    .et-chip{color:#8FD9A8;border:1px solid rgba(11,157,70,.45);background:rgba(11,157,70,.12)}
+    .et-fout{background:rgba(254,226,226,.10);border:1px solid rgba(252,165,165,.35);color:#fca5a5}
   </style>
 </head>
-<body x-data="inlog()" x-init="init()" x-cloak class="flex items-center justify-center p-4">
+<body x-data="inlog()" x-init="init()" x-cloak class="min-h-screen bg-[#141609] text-white">
+  <div class="min-h-screen grid lg:grid-cols-2">
 
-  <div class="w-full max-w-sm">
-    <div class="card p-8">
-      <img src="/favicon.png" class="w-14 h-14 rounded-2xl mx-auto mb-4" alt="">
-      <h1 class="font-h text-xl font-bold text-center mb-1">Essenza Tuinen</h1>
-      <p class="text-center text-sm mb-6" style="color:#6B7060" x-text="setup ? 'Richt je beheerdersaccount in' : 'Werkomgeving'"></p>
-
-      <!-- Eenmalig: het eerste beheerdersaccount -->
-      <form x-show="setup" @submit.prevent="eersteAccount()">
-        <p class="text-xs mb-4 p-3 rounded-lg" style="background:#F5F7EE;color:#4b5043">
-          Er is nog geen account. Maak hieronder je persoonlijke beheerdersaccount aan met het huidige beheerderswachtwoord.
-          Daarna vervalt dat gedeelde wachtwoord en logt iedereen in met een eigen account.
-        </p>
-        <label class="lbl">Je naam</label>
-        <input class="inp mt-1 mb-3" x-model="naam" autocomplete="name" required>
-        <label class="lbl">E-mailadres</label>
-        <input type="email" class="inp mt-1 mb-3" x-model="email" autocomplete="username" required>
-        <label class="lbl">Kies een wachtwoord</label>
-        <input type="password" class="inp mt-1 mb-1" x-model="pw" autocomplete="new-password" required>
-        <p class="text-[11px] mb-3" style="color:#6B7060">Minimaal 10 tekens.</p>
-        <label class="lbl">Huidig beheerderswachtwoord</label>
-        <input type="password" class="inp mt-1 mb-4" x-model="gedeeld" autocomplete="off" required>
-        <p x-show="fout" x-text="fout" class="melding mb-3"></p>
-        <button class="btn btn-primary" :disabled="busy" x-text="busy?'Bezig…':'Account aanmaken'"></button>
-      </form>
-
-      <!-- Gewoon inloggen -->
-      <form x-show="!setup" @submit.prevent="login()">
-        <label class="lbl">E-mailadres</label>
-        <input type="email" class="inp mt-1 mb-3" x-model="email" autocomplete="username" required autofocus>
-        <label class="lbl">Wachtwoord</label>
-        <input type="password" class="inp mt-1 mb-4" x-model="pw" autocomplete="current-password" required>
-        <p x-show="fout" x-text="fout" class="melding mb-3"></p>
-        <button class="btn btn-primary" :disabled="busy" x-text="busy?'Bezig…':'Inloggen'"></button>
-        <p class="text-xs text-center mt-4" style="color:#6B7060">
-          Wachtwoord kwijt? Vraag je beheerder om een nieuwe link.
-        </p>
-      </form>
+    <!-- Merkpaneel -->
+    <div class="et-merk relative hidden lg:flex flex-col justify-between p-12 overflow-hidden">
+      <div class="relative z-10">
+        <img src="/generated/essenza-tuinen/logo-white.png" alt="Essenza Tuinen" class="h-20 w-auto object-contain">
+      </div>
+      <div class="relative z-10 max-w-md">
+        <h1 class="font-h text-5xl font-extrabold leading-[1.05] mb-5" x-text="setup ? 'Even inrichten.' : 'Welkom terug.'"></h1>
+        <p class="text-white/55 leading-relaxed mb-8">De werkomgeving van Essenza Tuinen: vul je uren in, bekijk de planning en beheer aanvragen, offertes en facturen.</p>
+        <div class="flex flex-wrap gap-2.5">
+          <span class="et-chip px-3.5 py-1.5 rounded-full text-sm">Uren</span>
+          <span class="et-chip px-3.5 py-1.5 rounded-full text-sm">Planning</span>
+          <span class="et-chip px-3.5 py-1.5 rounded-full text-sm">Aanvragen</span>
+          <span class="et-chip px-3.5 py-1.5 rounded-full text-sm">Offertes &amp; facturen</span>
+        </div>
+      </div>
+      <div class="relative z-10 text-white/35 text-sm">Hoveniersbedrijf · ontwerp, aanleg &amp; onderhoud</div>
     </div>
-    <p class="text-center text-xs mt-5" style="color:rgba(255,255,255,.5)">Essenza Tuinen · werkomgeving</p>
+
+    <!-- Formulier -->
+    <div class="flex items-center justify-center p-8 bg-[#141609]">
+      <div class="et-kaart w-full max-w-sm">
+        <div class="lg:hidden mb-8">
+          <img src="/generated/essenza-tuinen/logo-white.png" alt="Essenza Tuinen" class="h-14 w-auto object-contain">
+        </div>
+
+        <!-- Eenmalig: het eerste beheerdersaccount -->
+        <form x-show="setup" @submit.prevent="eersteAccount()">
+          <h2 class="font-h text-3xl font-extrabold mb-1.5">Beheerder instellen</h2>
+          <p class="text-white/45 text-sm mb-6">Essenza Tuinen · werkomgeving</p>
+          <p class="text-xs mb-5 p-3 rounded-xl bg-white/5 border border-white/10 text-white/60">
+            Er is nog geen account. Maak hieronder je persoonlijke beheerdersaccount aan met het huidige
+            beheerderswachtwoord. Daarna vervalt dat gedeelde wachtwoord en logt iedereen in met een eigen account.
+          </p>
+          <label class="block text-xs font-semibold text-white/60 mb-1.5">Je naam</label>
+          <input class="et-in w-full px-4 py-3 mb-4 rounded-xl text-sm" x-model="naam" autocomplete="name" required>
+          <label class="block text-xs font-semibold text-white/60 mb-1.5">E-mailadres</label>
+          <input type="email" class="et-in w-full px-4 py-3 mb-4 rounded-xl text-sm" x-model="email" autocomplete="username" required>
+          <label class="block text-xs font-semibold text-white/60 mb-1.5">Kies een wachtwoord</label>
+          <input type="password" class="et-in w-full px-4 py-3 mb-1 rounded-xl text-sm" x-model="pw" autocomplete="new-password" required>
+          <p class="text-[11px] text-white/35 mb-4">Minimaal 10 tekens.</p>
+          <label class="block text-xs font-semibold text-white/60 mb-1.5">Huidig beheerderswachtwoord</label>
+          <input type="password" class="et-in w-full px-4 py-3 mb-5 rounded-xl text-sm" x-model="gedeeld" autocomplete="off" required>
+          <p x-show="fout" x-text="fout" class="et-fout text-sm rounded-lg px-3 py-2.5 mb-4"></p>
+          <button class="et-btn w-full py-3 rounded-xl font-bold text-white shadow-lg" :disabled="busy" x-text="busy?'Bezig…':'Account aanmaken'"></button>
+        </form>
+
+        <!-- Gewoon inloggen -->
+        <form x-show="!setup" @submit.prevent="login()">
+          <h2 class="font-h text-3xl font-extrabold mb-1.5">Inloggen</h2>
+          <p class="text-white/45 text-sm mb-8">Essenza Tuinen · werkomgeving</p>
+
+          <label class="block text-xs font-semibold text-white/60 mb-1.5">E-mailadres</label>
+          <input type="email" class="et-in w-full px-4 py-3 mb-4 rounded-xl text-sm" x-model="email" autocomplete="username webauthn" required autofocus>
+
+          <label class="block text-xs font-semibold text-white/60 mb-1.5">Wachtwoord</label>
+          <div class="relative mb-6">
+            <input :type="toon?'text':'password'" class="et-in w-full px-4 py-3 pr-11 rounded-xl text-sm" x-model="pw" autocomplete="current-password" required>
+            <button type="button" @click="toon=!toon" :aria-label="toon?'Verberg wachtwoord':'Toon wachtwoord'"
+                    class="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/80">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/>
+              </svg>
+            </button>
+          </div>
+
+          <p x-show="fout" x-text="fout" class="et-fout text-sm rounded-lg px-3 py-2.5 mb-4"></p>
+          <button class="et-btn w-full py-3 rounded-xl font-bold text-white shadow-lg" :disabled="busy" x-text="busy?'Bezig…':'Inloggen'"></button>
+
+          <template x-if="kanPasskey">
+            <div>
+              <div class="flex items-center gap-3 my-4 text-white/30 text-xs">
+                <span class="flex-1 h-px bg-white/15"></span>of<span class="flex-1 h-px bg-white/15"></span>
+              </div>
+              <button type="button" @click="passkeyLogin()" :disabled="busy"
+                      class="w-full py-2.5 rounded-xl font-semibold text-sm bg-white/10 text-white border border-white/20 flex items-center justify-center gap-2 hover:bg-white/15 transition">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/>
+                </svg>
+                Inloggen met een passkey
+              </button>
+              <p class="text-[11px] text-white/35 text-center mt-2">Met je vingerafdruk, gezicht of pincode.</p>
+            </div>
+          </template>
+
+          <p class="text-xs text-center mt-6 text-white/40">Wachtwoord kwijt? Vraag je beheerder om een nieuwe link.</p>
+        </form>
+
+        <a href="/" class="block text-center mt-6 text-white/45 hover:text-white text-sm transition">&larr; Terug naar de website</a>
+      </div>
+    </div>
   </div>
 
+<script src="/passkey.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
 <script>
 function inlog(){return{
-  setup:false, email:'', pw:'', naam:'', gedeeld:'', busy:false, fout:'',
+  setup:false, email:'', pw:'', naam:'', gedeeld:'', busy:false, fout:'', toon:false, kanPasskey:false,
 
   async api(path,opts){ const r=await fetch(path,Object.assign({headers:{'Content-Type':'application/json'}},opts));
     try{ return await r.json() }catch{ return {ok:false,error:'Serverfout ('+r.status+')'} } },
 
   async init(){
+    this.kanPasskey = window.Passkey && Passkey.beschikbaar();
     const d=await this.api('/api/session');
     if(d && d.authed) return this.verder();
     this.setup=!!(d && d.setup);
@@ -91,12 +152,19 @@ function inlog(){return{
     this.busy=false;
     if(d.ok) this.verder(); else this.fout=d.error||'Inloggen mislukt.';
   },
+  async passkeyLogin(){
+    this.busy=true; this.fout='';
+    const d=await Passkey.login();
+    this.busy=false;
+    if(d.ok) return this.verder();
+    if(!d.geannuleerd || d.error) this.fout=d.error||'Inloggen met passkey mislukt.';
+  },
   async eersteAccount(){
     this.busy=true; this.fout='';
     const d=await this.api('/api/session',{method:'POST',body:JSON.stringify({
       action:'setup', naam:this.naam, email:this.email, password:this.pw, beheerderswachtwoord:this.gedeeld })});
     this.busy=false;
-    if(d.ok) this.verder(); else this.fout=d.error||'Aanmaken mislukt.';
+    if(d.ok) location.href='/account-aanmaken?passkey=1'; else this.fout=d.error||'Aanmaken mislukt.';
   },
 }}
 </script>

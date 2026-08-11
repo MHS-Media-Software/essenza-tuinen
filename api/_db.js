@@ -105,6 +105,9 @@ function ensureSchema() {
       titel TEXT, lead_id INTEGER, klant TEXT, adres TEXT, notitie TEXT,
       soort TEXT DEFAULT 'klus', status TEXT DEFAULT 'gepland',
       created_by INTEGER, created TEXT, updated TEXT )` },
+    { sql: `CREATE TABLE IF NOT EXISTS passkeys (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, cred_id TEXT UNIQUE,
+      public_key TEXT, sign_count INTEGER DEFAULT 0, naam TEXT, created TEXT, last_used TEXT )` },
     { sql: `CREATE TABLE IF NOT EXISTS login_attempts ( id INTEGER PRIMARY KEY AUTOINCREMENT, sleutel TEXT, ts INTEGER )` },
     { sql: 'CREATE INDEX IF NOT EXISTS idx_hours_user_datum ON hours(user_id, datum)' },
     { sql: 'CREATE INDEX IF NOT EXISTS idx_hours_week ON hours(week)' },
@@ -229,12 +232,34 @@ async function requirePerm(req, res, perm) {
 // Alleen nog "is er iemand ingelogd" — gebruikt door gedeelde leesroutes.
 async function requireUser(req, res) { return requirePerm(req, res, null); }
 
+// Cookies stapelen i.p.v. overschrijven: bij passkey-login worden de sessie- en
+// de challenge-cookie in hetzelfde antwoord gezet.
+function zetCookie(res, str) {
+  const bestaand = res.getHeader ? res.getHeader('Set-Cookie') : null;
+  const lijst = bestaand ? (Array.isArray(bestaand) ? bestaand.slice() : [bestaand]) : [];
+  lijst.push(str);
+  res.setHeader('Set-Cookie', lijst);
+}
 function setAuthCookie(res, user) {
   const tok = signToken({ u: user.id, v: Number(user.pass_version || 1), exp: Date.now() + 7 * 864e5 });
-  res.setHeader('Set-Cookie', `${COOKIE}=${tok}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${7 * 86400}`);
+  zetCookie(res, `${COOKIE}=${tok}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${7 * 86400}`);
 }
 function clearAuthCookie(res) {
-  res.setHeader('Set-Cookie', `${COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`);
+  zetCookie(res, `${COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`);
+}
+
+// ── Passkey-challenge (kort geldig, ondertekend, geen serverstate) ───────────
+const WA_COOKIE = 'et_wa';
+function setChallengeCookie(res, doel, challenge) {
+  const tok = signToken({ d: doel, c: challenge, exp: Date.now() + 5 * 60000 });
+  zetCookie(res, `${WA_COOKIE}=${tok}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=300`);
+}
+function leesChallenge(req, doel) {
+  const p = verifyToken(readCookie(req, WA_COOKIE));
+  return (p && p.d === doel) ? p.c : null;
+}
+function clearChallengeCookie(res) {
+  zetCookie(res, `${WA_COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`);
 }
 
 // ── Login-pogingen afremmen (per e-mail + IP, glijdend venster van 15 min) ────
@@ -328,4 +353,5 @@ export { run, q, exec, ensureSchema, getSetting, setSetting, nextSeq, readBody, 
   hashPw, verifyPw, customerEmail, setCustomerCookie, clearCustomerCookie,
   PERMS, PERM_KEYS, ROLLEN, cleanPerms, currentUser, hasPerm, requirePerm, requireUser,
   setAuthCookie, clearAuthCookie, userCount, tooManyAttempts, noteAttempt, clearAttempts,
+  setChallengeCookie, leesChallenge, clearChallengeCookie,
   randomToken, isoWeek, weekStart };
