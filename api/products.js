@@ -49,7 +49,9 @@ export default async function handler(req, res) {
     if (req.method === 'GET') {
       await seedIfEmpty();
       const all = req.query && (req.query.all === '1' || req.query.all === 'true');
-      if (all && !db.isAdmin(req)) return res.status(401).json({ ok: false, error: 'auth' });
+      // De volledige lijst (incl. inactieve producten en inkoopprijzen) is alleen
+      // voor ingelogde medewerkers; de website ziet enkel de actieve producten.
+      if (all && !(await db.hasPerm(req, null))) return res.status(401).json({ ok: false, error: 'auth' });
       const sql = all
         ? 'SELECT * FROM products ORDER BY categorie, sort, id'
         : 'SELECT * FROM products WHERE actief=1 ORDER BY categorie, sort, id';
@@ -57,7 +59,7 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true, uurtarief, categorien: CATS, products: rows.map(r => withPrijs(r, uurtarief)) });
     }
 
-    if (!db.requireAdmin(req, res)) return;
+    if (!(await db.requirePerm(req, res, 'producten'))) return;
     const body = await db.readBody(req);
 
     if (req.method === 'POST') {

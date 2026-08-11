@@ -10,7 +10,7 @@ function parseRow(r) { let regels = []; try { regels = JSON.parse(r.regels) || [
 export default async function handler(req, res) {
   try {
     await db.ensureSchema();
-    if (!db.requireAdmin(req, res)) return;
+    if (!(await db.requirePerm(req, res, 'facturen'))) return;
 
     if (req.method === 'GET') {
       if (req.query && req.query.id) {

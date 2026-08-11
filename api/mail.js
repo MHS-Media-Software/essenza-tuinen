@@ -8,11 +8,12 @@ import nodemailer from 'nodemailer';
 export default async function handler(req, res) {
   try {
     await db.ensureSchema();
-    if (!db.requireAdmin(req, res)) return;
     if (req.method !== 'POST') return res.status(405).json({ ok: false, error: 'method' });
 
     const b = await db.readBody(req);
     const type = b.type === 'invoice' ? 'invoice' : 'quote';
+    // Versturen mag alleen wie het bijbehorende onderdeel ook mag beheren.
+    if (!(await db.requirePerm(req, res, type === 'invoice' ? 'facturen' : 'offertes'))) return;
     const id = +b.id; if (!id) return res.status(400).json({ ok: false, error: 'id' });
     const table = type === 'invoice' ? 'invoices' : 'quotes';
     const doc = (await db.q(`SELECT * FROM ${table} WHERE id=?`, [id]))[0];

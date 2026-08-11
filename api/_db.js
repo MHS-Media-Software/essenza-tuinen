@@ -83,6 +83,33 @@ function ensureSchema() {
       id INTEGER PRIMARY KEY AUTOINCREMENT, ref_type TEXT, ref_id INTEGER, aan TEXT, onderwerp TEXT,
       status TEXT, provider TEXT, fout TEXT, created TEXT )` },
     { sql: `CREATE TABLE IF NOT EXISTS settings ( key TEXT PRIMARY KEY, value TEXT )` },
+
+    // ── Personeel: accounts, rechten, uren en planning ──────────────────────
+    { sql: `CREATE TABLE IF NOT EXISTS users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, email TEXT UNIQUE NOT NULL, pass_hash TEXT,
+      naam TEXT, telefoon TEXT, rol TEXT DEFAULT 'medewerker', rechten TEXT,
+      actief INTEGER DEFAULT 1, pass_version INTEGER DEFAULT 1,
+      created TEXT, last_login TEXT )` },
+    { sql: `CREATE TABLE IF NOT EXISTS invites (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, token TEXT UNIQUE, soort TEXT DEFAULT 'invite',
+      email TEXT, naam TEXT, rol TEXT, rechten TEXT, user_id INTEGER,
+      door TEXT, created TEXT, exp TEXT, gebruikt TEXT )` },
+    { sql: `CREATE TABLE IF NOT EXISTS hours (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, datum TEXT NOT NULL, week TEXT,
+      start TEXT, eind TEXT, pauze INTEGER DEFAULT 0, uren REAL DEFAULT 0,
+      soort TEXT DEFAULT 'werk', lead_id INTEGER, project TEXT, omschrijving TEXT, shift_id INTEGER,
+      status TEXT DEFAULT 'concept', beoordeeld_door INTEGER, beoordeeld_op TEXT, beoordeling_note TEXT,
+      created TEXT, updated TEXT )` },
+    { sql: `CREATE TABLE IF NOT EXISTS shifts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, datum TEXT NOT NULL, van TEXT, tot TEXT, user_id INTEGER,
+      titel TEXT, lead_id INTEGER, klant TEXT, adres TEXT, notitie TEXT,
+      soort TEXT DEFAULT 'klus', status TEXT DEFAULT 'gepland',
+      created_by INTEGER, created TEXT, updated TEXT )` },
+    { sql: `CREATE TABLE IF NOT EXISTS login_attempts ( id INTEGER PRIMARY KEY AUTOINCREMENT, sleutel TEXT, ts INTEGER )` },
+    { sql: 'CREATE INDEX IF NOT EXISTS idx_hours_user_datum ON hours(user_id, datum)' },
+    { sql: 'CREATE INDEX IF NOT EXISTS idx_hours_week ON hours(week)' },
+    { sql: 'CREATE INDEX IF NOT EXISTS idx_shifts_datum ON shifts(datum)' },
+    { sql: 'CREATE INDEX IF NOT EXISTS idx_attempts_ts ON login_attempts(ts)' },
   ])
     // Migraties (idempotent): kolommen die later zijn toegevoegd aan bestaande tabellen.
     .then(() => run([{ sql: 'ALTER TABLE products ADD COLUMN btw REAL DEFAULT 21' }]).catch(() => {}))
@@ -107,39 +134,127 @@ async function setSetting(key, value) {
     [key, JSON.stringify(value)]);
 }
 
-// ── Admin-auth (HMAC-getekende cookie, geen server-state) ─────────────────────
+// ── Rechten ───────────────────────────────────────────────────────────────────
+// Elk recht is een losse schakelaar per medewerker. De rol is enkel een voorzet
+// die de schakelaars in één klik goed zet; daarna staan ze los van elkaar.
+const PERMS = [
+  { key: 'uren_eigen', label: 'Eigen uren invullen', groep: 'Uren' },
+  { key: 'uren_alle', label: 'Uren van iedereen zien en goedkeuren', groep: 'Uren' },
+  { key: 'planning_bekijken', label: 'Planning bekijken', groep: 'Planning' },
+  { key: 'planning_beheren', label: 'Planning maken en wijzigen', groep: 'Planning' },
+  { key: 'leads', label: 'Aanvragen', groep: 'Administratie' },
+  { key: 'offertes', label: 'Offertes', groep: 'Administratie' },
+  { key: 'facturen', label: 'Facturen', groep: 'Administratie' },
+  { key: 'producten', label: 'Producten en prijzen', groep: 'Administratie' },
+  { key: 'instellingen', label: 'Instellingen', groep: 'Beheer' },
+  { key: 'team', label: 'Medewerkers en rechten beheren', groep: 'Beheer' },
+];
+const PERM_KEYS = PERMS.map(p => p.key);
+const ROLLEN = {
+  beheerder: PERM_KEYS.slice(),
+  planner: ['uren_eigen', 'uren_alle', 'planning_bekijken', 'planning_beheren', 'leads'],
+  medewerker: ['uren_eigen', 'planning_bekijken'],
+};
+function cleanPerms(list, rol) {
+  if (!Array.isArray(list)) return (ROLLEN[rol] || ROLLEN.medewerker).slice();
+  return PERM_KEYS.filter(k => list.includes(k));
+}
+
+// ── Auth (HMAC-getekende cookie met alleen het gebruikers-id) ─────────────────
+// De rechten zitten bewust NIET in de cookie: ze worden elke request vers uit de
+// database gelezen, zodat een ingetrokken recht direct werkt.
 const SECRET = process.env.SESSION_SECRET || 'dev-secret-change-me';
 const COOKIE = 'et_admin';
 function b64u(buf) { return Buffer.from(buf).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); }
-function signToken() {
-  const payload = b64u(JSON.stringify({ r: 'admin', exp: Date.now() + 7 * 864e5 }));
+function signToken(payloadObj) {
+  const payload = b64u(JSON.stringify(payloadObj));
   const sig = b64u(crypto.createHmac('sha256', SECRET).update(payload).digest());
   return `${payload}.${sig}`;
 }
 function verifyToken(tok) {
-  if (!tok || tok.indexOf('.') < 0) return false;
+  if (!tok || tok.indexOf('.') < 0) return null;
   const [payload, sig] = tok.split('.');
   const exp = b64u(crypto.createHmac('sha256', SECRET).update(payload).digest());
-  if (sig !== exp) return false;
-  try { const p = JSON.parse(Buffer.from(payload.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString()); return p.r === 'admin' && p.exp > Date.now(); }
-  catch { return false; }
+  let ok = false;
+  try { ok = crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(exp)); } catch { return null; }
+  if (!ok) return null;
+  try {
+    const p = JSON.parse(Buffer.from(payload.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString());
+    return p.exp > Date.now() ? p : null;
+  } catch { return null; }
 }
 function readCookie(req, name) {
   const raw = req.headers.cookie || '';
   const m = raw.match(new RegExp('(?:^|;\\s*)' + name + '=([^;]+)'));
   return m ? decodeURIComponent(m[1]) : '';
 }
-function isAdmin(req) { return verifyToken(readCookie(req, COOKIE)); }
-function setAuthCookie(res) {
-  res.setHeader('Set-Cookie', `${COOKIE}=${signToken()}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${7 * 86400}`);
+
+// Aantal accounts: zolang dit 0 is mag het gedeelde ADMIN_PASSWORD nog gebruikt
+// worden om het eerste beheerdersaccount aan te maken. Daarna nooit meer.
+async function userCount() {
+  const rows = await q('SELECT COUNT(*) AS n FROM users WHERE actief=1');
+  return Number(rows[0] && rows[0].n) || 0;
+}
+
+// Huidige gebruiker of null. Resultaat wordt per request gecachet op het req-object.
+async function currentUser(req) {
+  if (req._etUser !== undefined) return req._etUser;
+  req._etUser = null;
+  const p = verifyToken(readCookie(req, COOKIE));
+  if (p && p.u) {
+    const rows = await q('SELECT id,email,naam,telefoon,rol,rechten,actief,pass_version FROM users WHERE id=?', [p.u]);
+    const u = rows[0];
+    if (u && u.actief && Number(u.pass_version || 1) === Number(p.v || 1)) {
+      let rechten = []; try { rechten = JSON.parse(u.rechten || '[]'); } catch { rechten = []; }
+      req._etUser = { ...u, rechten: cleanPerms(rechten, u.rol) };
+    }
+  }
+  return req._etUser;
+}
+async function hasPerm(req, perm) {
+  const u = await currentUser(req);
+  if (!u) return false;
+  return !perm || u.rechten.includes(perm);
+}
+// Guard voor endpoints: geeft true als het mag, anders is het antwoord al verstuurd.
+async function requirePerm(req, res, perm) {
+  const u = await currentUser(req);
+  if (!u) { res.status(401).json({ ok: false, error: 'auth' }); return false; }
+  if (perm && !u.rechten.includes(perm)) {
+    res.status(403).json({ ok: false, error: 'Je hebt geen toegang tot dit onderdeel.' });
+    return false;
+  }
+  return true;
+}
+// Alleen nog "is er iemand ingelogd" — gebruikt door gedeelde leesroutes.
+async function requireUser(req, res) { return requirePerm(req, res, null); }
+
+function setAuthCookie(res, user) {
+  const tok = signToken({ u: user.id, v: Number(user.pass_version || 1), exp: Date.now() + 7 * 864e5 });
+  res.setHeader('Set-Cookie', `${COOKIE}=${tok}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${7 * 86400}`);
 }
 function clearAuthCookie(res) {
   res.setHeader('Set-Cookie', `${COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`);
 }
-function requireAdmin(req, res) {
-  if (isAdmin(req)) return true;
-  res.status(401).json({ ok: false, error: 'auth' });
-  return false;
+
+// ── Login-pogingen afremmen (per e-mail + IP, glijdend venster van 15 min) ────
+function clientIp(req) {
+  return String(req.headers['x-forwarded-for'] || '').split(',')[0].trim() || 'onbekend';
+}
+async function tooManyAttempts(req, email) {
+  const sleutel = `${String(email || '').toLowerCase()}|${clientIp(req)}`;
+  const since = Date.now() - 15 * 60000;
+  await exec('DELETE FROM login_attempts WHERE ts < ?', [Date.now() - 3600000]).catch(() => {});
+  const rows = await q('SELECT COUNT(*) AS n FROM login_attempts WHERE sleutel=? AND ts > ?', [sleutel, since]);
+  return (Number(rows[0] && rows[0].n) || 0) >= 8;
+}
+async function noteAttempt(req, email) {
+  const sleutel = `${String(email || '').toLowerCase()}|${clientIp(req)}`;
+  await exec('INSERT INTO login_attempts(sleutel,ts) VALUES(?,?)', [sleutel, Date.now()]).catch(() => {});
+}
+async function clearAttempts(req, email) {
+  const sleutel = `${String(email || '').toLowerCase()}|${clientIp(req)}`;
+  await exec('DELETE FROM login_attempts WHERE sleutel=?', [sleutel]).catch(() => {});
 }
 
 // ── Wachtwoord-hashing (klantaccounts) ───────────────────────────────────────
@@ -187,5 +302,30 @@ async function readBody(req) {
   });
 }
 
-export { run, q, exec, ensureSchema, getSetting, setSetting, nextSeq, isAdmin, requireAdmin, setAuthCookie, clearAuthCookie, readBody, COOKIE,
-  hashPw, verifyPw, customerEmail, setCustomerCookie, clearCustomerCookie };
+// Willekeurig, niet te raden token (uitnodigings- en herstellinks).
+function randomToken() { return crypto.randomBytes(24).toString('base64url'); }
+
+// ISO-weeknummer als '2026-W33' — de eenheid waarin uren worden goedgekeurd.
+function isoWeek(datum) {
+  const d = new Date(`${String(datum).slice(0, 10)}T00:00:00Z`);
+  if (isNaN(d)) return '';
+  const dag = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - dag);
+  const jaarStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  const week = Math.ceil(((d - jaarStart) / 86400000 + 1) / 7);
+  return `${d.getUTCFullYear()}-W${String(week).padStart(2, '0')}`;
+}
+// Maandag (ISO) van de week waarin deze datum valt, als 'YYYY-MM-DD'.
+function weekStart(datum) {
+  const d = new Date(`${String(datum).slice(0, 10)}T00:00:00Z`);
+  if (isNaN(d)) return '';
+  const dag = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() - (dag - 1));
+  return d.toISOString().slice(0, 10);
+}
+
+export { run, q, exec, ensureSchema, getSetting, setSetting, nextSeq, readBody, COOKIE,
+  hashPw, verifyPw, customerEmail, setCustomerCookie, clearCustomerCookie,
+  PERMS, PERM_KEYS, ROLLEN, cleanPerms, currentUser, hasPerm, requirePerm, requireUser,
+  setAuthCookie, clearAuthCookie, userCount, tooManyAttempts, noteAttempt, clearAttempts,
+  randomToken, isoWeek, weekStart };

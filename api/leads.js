@@ -22,7 +22,7 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true, id: r.lastInsertRowid });
     }
 
-    if (!db.requireAdmin(req, res)) return;
+    if (!(await db.requirePerm(req, res, 'leads'))) return;
 
     if (req.method === 'GET') {
       const rows = await db.q('SELECT * FROM leads ORDER BY id DESC LIMIT 500', []);

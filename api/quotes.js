@@ -26,7 +26,7 @@ export default async function handler(req, res) {
         if (qte.lead_id) await db.exec('UPDATE leads SET status=? WHERE id=?', [b.action === 'accept' ? 'gewonnen' : 'verloren', qte.lead_id]).catch(() => {});
         return res.status(200).json({ ok: true });
       }
-      if (!db.requireAdmin(req, res)) return;
+      if (!(await db.requirePerm(req, res, 'offertes'))) return;
       const id = +b.id; if (!id) return res.status(400).json({ ok: false, error: 'id' });
       const cur = (await db.q('SELECT * FROM quotes WHERE id=?', [id]))[0];
       if (!cur) return res.status(404).json({ ok: false, error: 'niet gevonden' });
@@ -53,7 +53,7 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true });
     }
 
-    if (!db.requireAdmin(req, res)) return;
+    if (!(await db.requirePerm(req, res, 'offertes'))) return;
 
     if (req.method === 'GET') {
       if (req.query && req.query.id) {

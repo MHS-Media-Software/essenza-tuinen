@@ -1,11 +1,13 @@
-// Instellingen: uurtarief + bedrijfsgegevens (voor offertes/facturen). GET admin, PUT admin.
+// Instellingen: uurtarief + bedrijfsgegevens (voor offertes/facturen).
+// Lezen mag elke ingelogde medewerker (het dashboard toont de bedrijfsnaam);
+// wijzigen vereist het recht 'instellingen'.
 import * as db from './_db.js';
 import { DEFAULT_BEDRIJF } from './_doc.js';
 
 export default async function handler(req, res) {
   try {
     await db.ensureSchema();
-    if (!db.requireAdmin(req, res)) return;
+    if (!(await db.requirePerm(req, res, req.method === 'GET' ? null : 'instellingen'))) return;
     if (req.method === 'GET') {
       const saved = await db.getSetting('bedrijf', {});
       const bedrijf = { ...DEFAULT_BEDRIJF, ...(saved && typeof saved === 'object' ? saved : {}) };

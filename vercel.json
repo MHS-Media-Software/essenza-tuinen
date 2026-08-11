@@ -15,6 +15,10 @@
   "rewrites": [
     { "source": "/admin", "destination": "/admin.html" },
     { "source": "/admin/", "destination": "/admin.html" },
+    { "source": "/inloggen", "destination": "/inloggen.html" },
+    { "source": "/inloggen/", "destination": "/inloggen.html" },
+    { "source": "/account-aanmaken", "destination": "/aanmelden.html" },
+    { "source": "/account-aanmaken/", "destination": "/aanmelden.html" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }

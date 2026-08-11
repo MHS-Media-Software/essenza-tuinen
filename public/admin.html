@@ -23,6 +23,7 @@
     .card{background:#fff;border:1px solid #E6E8DC;border-radius:1rem}
     .btn{display:inline-flex;align-items:center;gap:.4rem;font-weight:700;border-radius:.7rem;transition:all .15s;font-size:.85rem;cursor:pointer}
     .btn-primary{background:#0B9D46;color:#fff;padding:.6rem 1.1rem}.btn-primary:hover{background:#087A37}
+    .btn:disabled{opacity:.45;cursor:default}.btn-primary:disabled:hover{background:#0B9D46}
     .btn-sec{background:#fff;border:1px solid #E6E8DC;color:#1F2113;padding:.55rem 1rem}.btn-sec:hover{background:#F5F7EE}
     .btn-danger{background:#fff;border:1px solid #f0c4c4;color:#C0392B;padding:.5rem .8rem}
     .inp{width:100%;padding:.6rem .8rem;border:1px solid #E6E8DC;border-radius:.6rem;font-size:.9rem;outline:none;background:#fff}
@@ -34,23 +35,29 @@
     .skel{background:linear-gradient(90deg,#eee,#f6f6f6,#eee);background-size:200% 100%;animation:sh 1.2s infinite}
     @keyframes sh{0%{background-position:200% 0}100%{background-position:-200% 0}}
     .pill{font-size:.68rem;font-weight:700;padding:.18rem .6rem;border-radius:999px;text-transform:capitalize}
+    .pill.zin{text-transform:none}
+    .navgroep{font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:#9aa08d;padding:.9rem .9rem .25rem}
+    /* Toasts en bevestigingen — geen native dialogvensters in het beheer */
+    .toastwrap{position:fixed;left:50%;transform:translateX(-50%);bottom:1.2rem;z-index:60;display:flex;flex-direction:column;gap:.5rem;width:min(92vw,26rem)}
+    .toast{padding:.7rem .95rem;border-radius:.7rem;font-size:.85rem;font-weight:600;box-shadow:0 10px 30px rgba(31,33,19,.18);background:#1F2113;color:#fff}
+    .toast.ok{background:#087A37}.toast.err{background:#C0392B}
+    .modalbg{position:fixed;inset:0;background:rgba(31,33,19,.55);z-index:50;display:flex;align-items:center;justify-content:center;padding:1rem}
+    /* Weekrooster */
+    .rooster{display:grid;grid-template-columns:9rem repeat(7,minmax(7.5rem,1fr));min-width:64rem}
+    .roostercel{border-left:1px solid #E6E8DC;border-top:1px solid #E6E8DC;padding:.35rem;min-height:5.5rem;background:#fff}
+    .roostercel.vandaag{background:#FAFCF6}
+    .klus{display:block;width:100%;text-align:left;font-size:.72rem;line-height:1.25;padding:.3rem .4rem;border-radius:.4rem;margin-bottom:.25rem;background:#E4F2E8;border-left:3px solid #0B9D46;color:#1F2113}
+    .klus.verlof{background:#FCF3D9;border-left-color:#d8b23a}
+    .klus.intern{background:#EDEFE6;border-left-color:#9aa08d}
+    .dagkop{font-size:.72rem;font-weight:700;padding:.45rem .5rem;color:#4b5043;border-left:1px solid #E6E8DC;background:#F5F7EE}
+    .urenrij{display:grid;grid-template-columns:6.5rem 1fr auto;gap:.5rem;align-items:center}
   </style>
 </head>
 <body x-data="admin()" x-init="init()" x-cloak>
 
-  <!-- LOGIN -->
+  <!-- Nog niet ingelogd: doorsturen naar de inlogpagina -->
   <div x-show="!authed" class="min-h-screen flex items-center justify-center p-4" style="background:linear-gradient(135deg,#1F2113,#2C3019)">
-    <div class="card w-full max-w-sm p-8">
-      <img src="/favicon.png" class="w-14 h-14 rounded-2xl mx-auto mb-4" alt="">
-      <h1 class="font-h text-xl font-bold text-center mb-1" style="color:#1F2113">Essenza Tuinen</h1>
-      <p class="text-center text-sm mb-6" style="color:#6B7060">Beheeromgeving</p>
-      <form @submit.prevent="login()">
-        <label class="lbl">Wachtwoord</label>
-        <input type="password" x-model="pw" class="inp mt-1 mb-3" placeholder="••••••••" autofocus>
-        <p x-show="loginErr" x-text="loginErr" class="text-xs mb-3" style="color:#C0392B"></p>
-        <button class="btn btn-primary w-full justify-center" :disabled="busy" x-text="busy?'Bezig…':'Inloggen'"></button>
-      </form>
-    </div>
+    <p class="text-sm" style="color:rgba(255,255,255,.7)">Even geduld…</p>
   </div>
 
   <!-- APP -->
@@ -61,29 +68,58 @@
         <img src="/favicon.png" class="w-9 h-9 rounded-xl" alt="">
         <div><p class="font-h font-bold text-sm leading-tight">Essenza Tuinen</p><p class="text-[11px]" style="color:#6B7060">Beheer</p></div>
       </div>
-      <nav class="space-y-1 flex-1">
-        <div class="navi" :class="view==='dashboard'&&'active'" @click="view='dashboard'">Dashboard</div>
-        <div class="navi" :class="view==='leads'&&'active'" @click="view='leads';loadLeads()">Aanvragen <span x-show="leads.length" class="ml-auto text-[11px] font-bold px-1.5 rounded-full" style="background:#E4F2E8;color:#087A37" x-text="leads.length"></span></div>
-        <div class="navi" :class="view==='quotes'&&'active'" @click="view='quotes';loadQuotes()">Offertes <span x-show="quotes.length" class="ml-auto text-[11px] font-bold px-1.5 rounded-full" style="background:#E4F2E8;color:#087A37" x-text="quotes.length"></span></div>
-        <div class="navi" :class="view==='invoices'&&'active'" @click="view='invoices';loadInvoices()">Facturen <span x-show="invoices.length" class="ml-auto text-[11px] font-bold px-1.5 rounded-full" style="background:#E4F2E8;color:#087A37" x-text="invoices.length"></span></div>
-        <div class="navi" :class="view==='products'&&'active'" @click="view='products';loadProducts()">Producten &amp; prijzen</div>
-        <div class="navi" :class="view==='settings'&&'active'" @click="view='settings'">Instellingen</div>
+      <nav class="space-y-1 flex-1 overflow-y-auto">
+        <div class="navi" x-show="mag('leads')" :class="view==='dashboard'&&'active'" @click="ga('dashboard')">Dashboard</div>
+
+        <p class="navgroep" x-show="mag('uren_eigen')||mag('uren_alle')||mag('planning_bekijken')">Werk</p>
+        <div class="navi" x-show="mag('uren_eigen')" :class="view==='uren'&&'active'" @click="ga('uren')">Mijn uren</div>
+        <div class="navi" x-show="mag('uren_alle')" :class="view==='urenteam'&&'active'" @click="ga('urenteam')">Urenoverzicht
+          <span x-show="teIndienen" class="ml-auto text-[11px] font-bold px-1.5 rounded-full" style="background:#FCF3D9;color:#8a6d0b" x-text="teIndienen"></span></div>
+        <div class="navi" x-show="mag('planning_bekijken')" :class="view==='planning'&&'active'" @click="ga('planning')">Planning</div>
+
+        <p class="navgroep" x-show="mag('leads')||mag('offertes')||mag('facturen')||mag('producten')">Administratie</p>
+        <div class="navi" x-show="mag('leads')" :class="view==='leads'&&'active'" @click="ga('leads')">Aanvragen <span x-show="leads.length" class="ml-auto text-[11px] font-bold px-1.5 rounded-full" style="background:#E4F2E8;color:#087A37" x-text="leads.length"></span></div>
+        <div class="navi" x-show="mag('offertes')" :class="view==='quotes'&&'active'" @click="ga('quotes')">Offertes <span x-show="quotes.length" class="ml-auto text-[11px] font-bold px-1.5 rounded-full" style="background:#E4F2E8;color:#087A37" x-text="quotes.length"></span></div>
+        <div class="navi" x-show="mag('facturen')" :class="view==='invoices'&&'active'" @click="ga('invoices')">Facturen <span x-show="invoices.length" class="ml-auto text-[11px] font-bold px-1.5 rounded-full" style="background:#E4F2E8;color:#087A37" x-text="invoices.length"></span></div>
+        <div class="navi" x-show="mag('producten')" :class="view==='products'&&'active'" @click="ga('products')">Producten &amp; prijzen</div>
+
+        <p class="navgroep" x-show="mag('team')||mag('instellingen')">Beheer</p>
+        <div class="navi" x-show="mag('team')" :class="view==='team'&&'active'" @click="ga('team')">Medewerkers</div>
+        <div class="navi" x-show="mag('instellingen')" :class="view==='settings'&&'active'" @click="ga('settings')">Instellingen</div>
       </nav>
-      <button class="btn btn-sec justify-center mt-4" @click="logout()">Uitloggen</button>
+
+      <div class="mt-4 pt-3 border-t" style="border-color:#E6E8DC">
+        <button class="w-full flex items-center gap-2 px-1 py-1.5 rounded-lg hover:bg-[#F5F7EE]" @click="ga('account')">
+          <span class="w-8 h-8 rounded-full grid place-items-center font-bold text-xs shrink-0" style="background:#E4F2E8;color:#087A37" x-text="initialen"></span>
+          <span class="text-left min-w-0 flex-1">
+            <span class="block text-xs font-bold truncate" x-text="ik.naam||ik.email"></span>
+            <span class="block text-[11px] capitalize" style="color:#6B7060" x-text="ik.rol"></span>
+          </span>
+        </button>
+        <button class="btn btn-sec justify-center w-full mt-2" @click="logout()">Uitloggen</button>
+      </div>
     </aside>
 
     <!-- Mobile topbar -->
     <div class="md:hidden fixed top-0 inset-x-0 bg-white border-b z-20 flex items-center gap-2 px-3 py-2" style="border-color:#E6E8DC">
       <img src="/favicon.png" class="w-8 h-8 rounded-lg">
-      <select class="inp !py-1.5 flex-1" x-model="view" @change="view==='leads'&&loadLeads(); view==='quotes'&&loadQuotes(); view==='invoices'&&loadInvoices(); view==='products'&&loadProducts()">
-        <option value="dashboard">Dashboard</option><option value="leads">Aanvragen</option>
-        <option value="quotes">Offertes</option><option value="invoices">Facturen</option>
-        <option value="products">Producten &amp; prijzen</option><option value="settings">Instellingen</option>
+      <select class="inp !py-1.5 flex-1" x-model="view" @change="ga(view)">
+        <template x-if="mag('leads')"><option value="dashboard">Dashboard</option></template>
+        <template x-if="mag('uren_eigen')"><option value="uren">Mijn uren</option></template>
+        <template x-if="mag('uren_alle')"><option value="urenteam">Urenoverzicht</option></template>
+        <template x-if="mag('planning_bekijken')"><option value="planning">Planning</option></template>
+        <template x-if="mag('leads')"><option value="leads">Aanvragen</option></template>
+        <template x-if="mag('offertes')"><option value="quotes">Offertes</option></template>
+        <template x-if="mag('facturen')"><option value="invoices">Facturen</option></template>
+        <template x-if="mag('producten')"><option value="products">Producten &amp; prijzen</option></template>
+        <template x-if="mag('team')"><option value="team">Medewerkers</option></template>
+        <template x-if="mag('instellingen')"><option value="settings">Instellingen</option></template>
+        <option value="account">Mijn account</option>
       </select>
       <button class="btn btn-sec !px-3" @click="logout()">Uit</button>
     </div>
 
-    <main class="flex-1 p-4 md:p-8 mt-12 md:mt-0 max-w-6xl">
+    <main class="flex-1 min-w-0 p-4 md:p-8 mt-12 md:mt-0 max-w-6xl">
 
       <!-- DASHBOARD -->
       <section x-show="view==='dashboard'">
@@ -296,6 +332,275 @@
           </template>
         </div>
       </section>
+
+      <!-- MIJN UREN -->
+      <section x-show="view==='uren'">
+        <div class="flex flex-wrap items-center gap-3 mb-4">
+          <h1 class="font-h text-2xl font-bold flex-1">Mijn uren</h1>
+          <div class="flex items-center gap-1">
+            <button class="btn btn-sec !px-3" @click="weekVerzet(-1)" title="Vorige week">‹</button>
+            <button class="btn btn-sec !px-3" @click="weekNu()">Deze week</button>
+            <button class="btn btn-sec !px-3" @click="weekVerzet(1)" title="Volgende week">›</button>
+          </div>
+        </div>
+        <p class="text-sm mb-4" style="color:#6B7060" x-text="weekLabel"></p>
+
+        <!-- Status van de week -->
+        <div class="card p-4 mb-4 flex flex-wrap items-center gap-3">
+          <div class="flex-1 min-w-[12rem]">
+            <p class="lbl">Totaal deze week</p>
+            <p class="font-h text-2xl font-bold" x-text="urenTekst(weekTotaal)"></p>
+          </div>
+          <div class="flex-1 min-w-[12rem]">
+            <p class="lbl">Status</p>
+            <span class="pill zin inline-block mt-1" :style="statusStyle(weekStatus)" x-text="statusTekst(weekStatus)"></span>
+            <p x-show="weekNote" class="text-xs mt-1" style="color:#C0392B" x-text="weekNote"></p>
+          </div>
+          <div class="flex gap-2">
+            <button class="btn btn-primary" x-show="weekStatus==='concept'||weekStatus==='afgekeurd'" :disabled="!mijnUren.length" @click="weekIndienen()">Week indienen</button>
+            <span x-show="weekStatus==='ingediend'" class="text-sm" style="color:#6B7060">Ingediend — wacht op goedkeuring.</span>
+            <span x-show="weekStatus==='akkoord'" class="text-sm font-semibold" style="color:#087A37">Goedgekeurd</span>
+          </div>
+        </div>
+
+        <!-- Ingeplande klussen als snelinvoer -->
+        <div class="card p-4 mb-4" x-show="klussen.length">
+          <p class="lbl mb-2">Vanuit je planning</p>
+          <div class="flex flex-wrap gap-2">
+            <template x-for="k in klussen" :key="k.id">
+              <button class="btn btn-sec !py-1.5 !text-xs" @click="uurVanKlus(k)">
+                <span x-text="dagKort(k.datum)"></span>
+                <span class="font-normal" x-text="k.lead_naam||k.klant||k.titel||'Klus'"></span>
+              </button>
+            </template>
+          </div>
+          <p class="text-[11px] mt-2" style="color:#6B7060">Klik een klus aan om de uren voor die dag alvast in te vullen.</p>
+        </div>
+
+        <!-- Dagen -->
+        <div class="space-y-3">
+          <template x-for="d in weekDagen" :key="d.iso">
+            <div class="card p-4" :style="d.vandaag?'border-color:#0B9D46':''">
+              <div class="flex items-center gap-3 mb-2">
+                <p class="font-h font-bold text-sm flex-1" x-text="d.label"></p>
+                <p class="text-sm font-bold" x-show="dagTotaal(d.iso)" x-text="urenTekst(dagTotaal(d.iso))"></p>
+                <button class="btn btn-sec !py-1 !px-2.5 !text-xs" x-show="weekOpen" @click="nieuwUur(d.iso)">+ Uren</button>
+              </div>
+              <template x-if="!urenVanDag(d.iso).length">
+                <p class="text-xs" style="color:#9aa08d">Nog niets ingevuld.</p>
+              </template>
+              <div class="divide-y" style="border-color:#E6E8DC">
+                <template x-for="r in urenVanDag(d.iso)" :key="r.id">
+                  <div class="flex items-center gap-3 py-2 text-sm">
+                    <span class="font-bold w-14 shrink-0" x-text="urenTekst(r.uren)"></span>
+                    <span class="w-24 shrink-0 text-xs" style="color:#6B7060" x-text="r.start?(r.start+'–'+r.eind):''"></span>
+                    <span class="flex-1 min-w-0">
+                      <span class="block truncate" x-text="r.lead_naam||r.project||r.omschrijving||'—'"></span>
+                      <span x-show="(r.lead_naam||r.project)&&r.omschrijving" class="block text-xs truncate" style="color:#6B7060" x-text="r.omschrijving"></span>
+                    </span>
+                    <span x-show="r.soort&&r.soort!=='werk'" class="pill" style="background:#F5F7EE;color:#6B7060" x-text="r.soort"></span>
+                    <button class="text-xs font-bold" style="color:#0B9D46" x-show="!r.vergrendeld" @click="bewerkUur(r)">Wijzig</button>
+                    <button class="text-xs font-bold" style="color:#C0392B" x-show="!r.vergrendeld" @click="verwijderUur(r)">×</button>
+                  </div>
+                </template>
+              </div>
+            </div>
+          </template>
+        </div>
+      </section>
+
+      <!-- URENOVERZICHT (team) -->
+      <section x-show="view==='urenteam'">
+        <div class="flex flex-wrap items-center gap-3 mb-4">
+          <h1 class="font-h text-2xl font-bold flex-1">Urenoverzicht</h1>
+          <div class="flex items-center gap-1">
+            <button class="btn btn-sec !px-3" @click="weekVerzet(-1)">‹</button>
+            <button class="btn btn-sec !px-3" @click="weekNu()">Deze week</button>
+            <button class="btn btn-sec !px-3" @click="weekVerzet(1)">›</button>
+          </div>
+          <button class="btn btn-sec" @click="exporteerUren()">Exporteer CSV</button>
+        </div>
+        <p class="text-sm mb-4" style="color:#6B7060" x-text="weekLabel"></p>
+
+        <div class="card overflow-x-auto mb-4">
+          <table class="w-full text-sm min-w-[46rem]">
+            <thead>
+              <tr style="background:#F5F7EE">
+                <th class="text-left font-bold px-4 py-2.5">Medewerker</th>
+                <template x-for="d in weekDagen" :key="d.iso">
+                  <th class="px-2 py-2.5 text-center font-bold text-xs" x-text="d.kort"></th>
+                </template>
+                <th class="px-3 py-2.5 text-right font-bold">Totaal</th>
+                <th class="px-3 py-2.5 text-left font-bold">Status</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y" style="border-color:#E6E8DC">
+              <template x-for="c in collegas" :key="c.id">
+                <tr class="hover:bg-[#FAFCF6] cursor-pointer" @click="openMedewerkerWeek(c)">
+                  <td class="px-4 py-2.5 font-semibold">
+                    <span x-text="c.naam||c.email"></span>
+                    <span x-show="c.actief===0" class="pill zin ml-1" style="background:#EDEFE6;color:#6B7060">uit dienst</span>
+                  </td>
+                  <template x-for="d in weekDagen" :key="d.iso">
+                    <td class="px-2 py-2.5 text-center" :style="teamDag(c.id,d.iso)?'':'color:#c9ccbf'"
+                        x-text="teamDag(c.id,d.iso)?urenTekst(teamDag(c.id,d.iso)):'–'"></td>
+                  </template>
+                  <td class="px-3 py-2.5 text-right font-bold" x-text="urenTekst(teamTotaal(c.id))"></td>
+                  <td class="px-3 py-2.5"><span class="pill zin" :style="statusStyle(teamStatus(c.id))" x-text="statusTekst(teamStatus(c.id))"></span></td>
+                </tr>
+              </template>
+            </tbody>
+            <tfoot>
+              <tr style="background:#F5F7EE">
+                <td class="px-4 py-2.5 font-bold">Totaal</td>
+                <template x-for="d in weekDagen" :key="d.iso">
+                  <td class="px-2 py-2.5 text-center font-bold" x-text="teamDagAlles(d.iso)?urenTekst(teamDagAlles(d.iso)):'–'"></td>
+                </template>
+                <td class="px-3 py-2.5 text-right font-bold" x-text="urenTekst(teamWeekAlles)"></td>
+                <td></td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+        <p class="text-xs" style="color:#6B7060">Klik op een medewerker om de regels te bekijken en de week goed te keuren.</p>
+      </section>
+
+      <!-- PLANNING -->
+      <section x-show="view==='planning'">
+        <div class="flex flex-wrap items-center gap-3 mb-4">
+          <h1 class="font-h text-2xl font-bold flex-1">Planning</h1>
+          <div class="flex items-center gap-1">
+            <button class="btn btn-sec !px-3" @click="weekVerzet(-1)">‹</button>
+            <button class="btn btn-sec !px-3" @click="weekNu()">Deze week</button>
+            <button class="btn btn-sec !px-3" @click="weekVerzet(1)">›</button>
+          </div>
+          <button class="btn btn-primary" x-show="magPlannen" @click="nieuweKlus(vandaagIso)">+ Klus inplannen</button>
+        </div>
+        <p class="text-sm mb-4" style="color:#6B7060" x-text="weekLabel"></p>
+
+        <!-- Weekrooster (desktop) -->
+        <div class="card overflow-x-auto hidden md:block">
+          <div class="rooster">
+            <div class="dagkop" style="border-left:none">Medewerker</div>
+            <template x-for="d in weekDagen" :key="'k'+d.iso"><div class="dagkop" x-text="d.kort2"></div></template>
+            <template x-for="c in planCollegas" :key="'r'+c.id">
+              <template x-for="cel in roosterRij(c)" :key="cel.key">
+                <div :class="cel.kop?'dagkop':('roostercel'+(cel.vandaag?' vandaag':''))"
+                     :style="cel.kop?'display:flex;align-items:center':''"
+                     @click="cel.kop||!magPlannen||nieuweKlus(cel.iso,c.id)">
+                  <span x-show="cel.kop" x-text="(c.naam||'Niet toegewezen')+(c.actief===0?' (uit dienst)':'')"></span>
+                  <template x-for="s in cel.klussen" :key="s.id">
+                    <button class="klus" :class="s.soort" @click.stop="bewerkKlus(s)">
+                      <span class="font-bold block truncate" x-text="s.van?(s.van+(s.tot?'–'+s.tot:'')):(s.soort==='verlof'?'Verlof':'Hele dag')"></span>
+                      <span class="block truncate" x-text="s.lead_naam||s.klant||s.titel||'Klus'"></span>
+                      <span x-show="s.adres" class="block truncate" style="color:#6B7060" x-text="s.adres"></span>
+                    </button>
+                  </template>
+                </div>
+              </template>
+            </template>
+          </div>
+        </div>
+
+        <!-- Lijst per dag (mobiel) -->
+        <div class="md:hidden space-y-3">
+          <template x-for="d in weekDagen" :key="'m'+d.iso">
+            <div class="card p-4" :style="d.vandaag?'border-color:#0B9D46':''">
+              <div class="flex items-center gap-2 mb-2">
+                <p class="font-h font-bold text-sm flex-1" x-text="d.label"></p>
+                <button class="btn btn-sec !py-1 !px-2.5 !text-xs" x-show="magPlannen" @click="nieuweKlus(d.iso)">+</button>
+              </div>
+              <template x-if="!klussenVanDag(d.iso).length"><p class="text-xs" style="color:#9aa08d">Niets ingepland.</p></template>
+              <template x-for="s in klussenVanDag(d.iso)" :key="s.id">
+                <button class="klus w-full mb-1" :class="s.soort" @click="bewerkKlus(s)">
+                  <span class="font-bold" x-text="(s.van?s.van+(s.tot?'–'+s.tot:'')+' · ':'')+(s.medewerker||'Niet toegewezen')"></span>
+                  <span class="block" x-text="s.lead_naam||s.klant||s.titel||'Klus'"></span>
+                </button>
+              </template>
+            </div>
+          </template>
+        </div>
+      </section>
+
+      <!-- MEDEWERKERS -->
+      <section x-show="view==='team'">
+        <div class="flex flex-wrap items-center gap-3 mb-4">
+          <h1 class="font-h text-2xl font-bold flex-1">Medewerkers</h1>
+          <button class="btn btn-primary" @click="nieuweUitnodiging()">+ Medewerker uitnodigen</button>
+        </div>
+
+        <div class="card divide-y mb-4" style="border-color:#E6E8DC">
+          <template x-for="u in teamUsers" :key="u.id">
+            <div class="p-4 flex flex-wrap items-center gap-3">
+              <span class="w-9 h-9 rounded-full grid place-items-center font-bold text-xs shrink-0"
+                    :style="u.actief?'background:#E4F2E8;color:#087A37':'background:#EDEFE6;color:#9aa08d'" x-text="initialenVan(u.naam||u.email)"></span>
+              <div class="min-w-0 flex-1">
+                <p class="font-semibold text-sm truncate">
+                  <span x-text="u.naam||u.email"></span>
+                  <span x-show="u.id===ik.id" class="text-xs font-normal" style="color:#6B7060">(jij)</span>
+                </p>
+                <p class="text-xs truncate" style="color:#6B7060" x-text="u.email"></p>
+              </div>
+              <span class="pill capitalize" style="background:#F5F7EE;color:#4b5043" x-text="u.rol"></span>
+              <span class="pill zin" :style="u.actief?'background:#E4F2E8;color:#087A37':'background:#EDEFE6;color:#6B7060'" x-text="u.actief?'Actief':'Non-actief'"></span>
+              <span class="text-xs hidden sm:block w-28" style="color:#9aa08d" x-text="u.last_login?('laatst: '+fmt(u.last_login)):'nog niet ingelogd'"></span>
+              <button class="btn btn-sec !py-1.5" @click="openMedewerker(u)">Rechten</button>
+            </div>
+          </template>
+        </div>
+
+        <!-- Openstaande uitnodigingen -->
+        <div class="card p-5" x-show="teamInvites.length">
+          <h2 class="font-h font-bold mb-1">Openstaande uitnodigingen</h2>
+          <p class="text-xs mb-3" style="color:#6B7060">Deze mensen hebben nog geen account aangemaakt.</p>
+          <div class="divide-y" style="border-color:#E6E8DC">
+            <template x-for="i in teamInvites" :key="i.id">
+              <div class="flex flex-wrap items-center gap-3 py-2.5 text-sm">
+                <span class="flex-1 min-w-0">
+                  <span class="font-semibold block truncate" x-text="i.naam||i.email"></span>
+                  <span class="text-xs block truncate" style="color:#6B7060" x-text="i.email+' · geldig t/m '+fmtDate(i.exp)"></span>
+                </span>
+                <span class="pill" style="background:#F5F7EE;color:#6B7060" x-text="i.soort==='reset'?'Wachtwoordherstel':'Uitnodiging'"></span>
+                <button class="btn btn-sec !py-1.5 !text-xs" @click="kopieer(i.link)">Link kopiëren</button>
+                <button class="btn btn-sec !py-1.5 !text-xs" @click="opnieuwSturen(i)">Opnieuw mailen</button>
+                <button class="btn btn-danger !py-1.5 !text-xs" @click="trekIn(i)">Intrekken</button>
+              </div>
+            </template>
+          </div>
+        </div>
+      </section>
+
+      <!-- MIJN ACCOUNT -->
+      <section x-show="view==='account'" class="max-w-2xl">
+        <h1 class="font-h text-2xl font-bold mb-4">Mijn account</h1>
+        <div class="card p-5 mb-4">
+          <h2 class="font-h font-bold mb-3">Gegevens</h2>
+          <div class="grid sm:grid-cols-2 gap-3">
+            <div><label class="lbl">Naam</label><input class="inp mt-1" x-model="ik.naam"></div>
+            <div><label class="lbl">Telefoon</label><input class="inp mt-1" x-model="ik.telefoon"></div>
+            <div class="sm:col-span-2"><label class="lbl">E-mailadres</label><input class="inp mt-1" :value="ik.email" disabled></div>
+          </div>
+          <button class="btn btn-primary mt-4" @click="profielOpslaan()">Opslaan</button>
+        </div>
+        <div class="card p-5 mb-4">
+          <h2 class="font-h font-bold mb-3">Wachtwoord wijzigen</h2>
+          <div class="grid sm:grid-cols-2 gap-3">
+            <div><label class="lbl">Huidig wachtwoord</label><input type="password" class="inp mt-1" x-model="pwOud" autocomplete="current-password"></div>
+            <div><label class="lbl">Nieuw wachtwoord</label><input type="password" class="inp mt-1" x-model="pwNieuw" autocomplete="new-password"></div>
+          </div>
+          <p class="text-xs mt-2" style="color:#6B7060">Minimaal 10 tekens. Je wordt op je andere apparaten uitgelogd.</p>
+          <button class="btn btn-primary mt-4" @click="wachtwoordWijzigen()">Wachtwoord wijzigen</button>
+        </div>
+        <div class="card p-5">
+          <h2 class="font-h font-bold mb-2">Jouw rechten</h2>
+          <div class="flex flex-wrap gap-2">
+            <template x-for="p in perms" :key="p.key">
+              <span class="pill" :style="mag(p.key)?'background:#E4F2E8;color:#087A37':'background:#F5F7EE;color:#9aa08d'" x-text="p.label"></span>
+            </template>
+          </div>
+          <p class="text-xs mt-3" style="color:#6B7060">Heb je ergens toegang toe nodig? Vraag het je beheerder.</p>
+        </div>
+      </section>
     </main>
   </div>
 
@@ -424,10 +729,255 @@
     </div>
   </div>
 
+  <!-- UREN-MODAL -->
+  <div x-show="uur" x-cloak class="modalbg" @click="uur=null">
+    <div class="card w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto" @click.stop x-show="uur">
+      <h2 class="font-h font-bold text-lg mb-4" x-text="uur&&uur.id?'Uren wijzigen':'Uren invullen'"></h2>
+      <template x-if="uur">
+        <div>
+          <div class="grid sm:grid-cols-2 gap-3">
+            <div><label class="lbl">Datum</label><input type="date" class="inp mt-1" x-model="uur.datum" :max="vandaagIso"></div>
+            <div><label class="lbl">Soort</label>
+              <select class="inp mt-1" x-model="uur.soort">
+                <option value="werk">Werk</option><option value="reis">Reistijd</option>
+                <option value="verlof">Verlof</option><option value="ziek">Ziek</option>
+              </select>
+            </div>
+          </div>
+          <div class="grid grid-cols-3 gap-3 mt-3">
+            <div><label class="lbl">Van</label><input type="time" class="inp mt-1" x-model="uur.start"></div>
+            <div><label class="lbl">Tot</label><input type="time" class="inp mt-1" x-model="uur.eind"></div>
+            <div><label class="lbl">Pauze (min)</label><input type="number" min="0" step="5" class="inp mt-1" x-model.number="uur.pauze"></div>
+          </div>
+          <p class="text-xs mt-2" style="color:#6B7060">
+            <span x-show="berekend>0">Dat is <b x-text="urenTekst(berekend)"></b>.</span>
+            <span x-show="!berekend">Geen tijden bij de hand? Vul hieronder het aantal uren in.</span>
+          </p>
+          <div class="mt-3" x-show="!uur.start||!uur.eind">
+            <label class="lbl">Aantal uren</label>
+            <input type="number" min="0" max="24" step="0.25" class="inp mt-1" x-model.number="uur.uren">
+          </div>
+
+          <div class="mt-3">
+            <label class="lbl">Klant of project</label>
+            <select class="inp mt-1" x-model="uur.keuze" @change="uur.keuze==='vrij'||(uur.project='')">
+              <option value="vrij">— zelf invullen —</option>
+              <template x-for="k in klantKeuzes" :key="'kk'+k.id"><option :value="String(k.id)" x-text="k.naam+(k.plaats?' · '+k.plaats:'')"></option></template>
+            </select>
+            <input x-show="uur.keuze==='vrij'" class="inp mt-2" x-model="uur.project" placeholder="Bijv. onderhoud Van Dijk, Middelburg">
+          </div>
+          <div class="mt-3">
+            <label class="lbl">Wat heb je gedaan?</label>
+            <textarea class="inp mt-1" rows="2" x-model="uur.omschrijving" placeholder="Korte omschrijving"></textarea>
+          </div>
+
+          <div class="flex gap-2 mt-5">
+            <button class="btn btn-primary flex-1 justify-center" :disabled="uurBusy" @click="bewaarUur()" x-text="uurBusy?'Bezig…':'Opslaan'"></button>
+            <button class="btn btn-sec" @click="uur=null">Annuleren</button>
+          </div>
+        </div>
+      </template>
+    </div>
+  </div>
+
+  <!-- WEEK VAN MEDEWERKER (goedkeuren) -->
+  <div x-show="weekDetail" x-cloak class="modalbg" @click="weekDetail=null">
+    <div class="card w-full max-w-2xl p-6 max-h-[90vh] overflow-y-auto" @click.stop x-show="weekDetail">
+      <template x-if="weekDetail">
+        <div>
+          <div class="flex items-start gap-3 mb-1">
+            <h2 class="font-h font-bold text-lg flex-1" x-text="weekDetail.naam"></h2>
+            <span class="pill zin" :style="statusStyle(weekDetail.status)" x-text="statusTekst(weekDetail.status)"></span>
+          </div>
+          <p class="text-sm mb-4" style="color:#6B7060" x-text="weekLabel"></p>
+
+          <template x-if="!weekDetail.rijen.length">
+            <p class="text-sm py-6 text-center" style="color:#6B7060">Deze medewerker heeft nog geen uren ingevuld voor deze week.</p>
+          </template>
+          <div class="divide-y" style="border-color:#E6E8DC">
+            <template x-for="r in weekDetail.rijen" :key="r.id">
+              <div class="flex items-center gap-3 py-2 text-sm">
+                <span class="w-24 shrink-0 text-xs" style="color:#6B7060" x-text="dagKort(r.datum)"></span>
+                <span class="font-bold w-14 shrink-0" x-text="urenTekst(r.uren)"></span>
+                <span class="flex-1 min-w-0 truncate" x-text="regelTekst(r)"></span>
+                <span x-show="r.soort&&r.soort!=='werk'" class="pill" style="background:#F5F7EE;color:#6B7060" x-text="r.soort"></span>
+              </div>
+            </template>
+          </div>
+          <div class="flex items-center gap-3 mt-3 pt-3 border-t" style="border-color:#E6E8DC">
+            <span class="font-h font-bold flex-1">Totaal</span>
+            <span class="font-h font-bold text-lg" x-text="urenTekst(weekDetail.totaal)"></span>
+          </div>
+
+          <div class="mt-4" x-show="weekDetail.rijen.length">
+            <label class="lbl">Opmerking <span class="normal-case font-normal">(optioneel, zichtbaar voor de medewerker)</span></label>
+            <input class="inp mt-1" x-model="weekDetail.note" placeholder="Bijv. dinsdag graag nog aanvullen">
+          </div>
+          <div class="flex flex-wrap gap-2 mt-4">
+            <button class="btn btn-primary" x-show="weekDetail.rijen.length&&weekDetail.status!=='akkoord'" @click="beoordeel('akkoord')">Goedkeuren</button>
+            <button class="btn btn-sec" x-show="weekDetail.rijen.length&&weekDetail.status==='ingediend'" @click="beoordeel('afgekeurd')">Afkeuren</button>
+            <button class="btn btn-sec" x-show="weekDetail.status==='akkoord'||weekDetail.status==='ingediend'" @click="beoordeel('heropenen')">Heropenen</button>
+            <button class="btn btn-sec ml-auto" @click="weekDetail=null">Sluiten</button>
+          </div>
+        </div>
+      </template>
+    </div>
+  </div>
+
+  <!-- KLUS-MODAL -->
+  <div x-show="klus" x-cloak class="modalbg" @click="klus=null">
+    <div class="card w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto" @click.stop x-show="klus">
+      <h2 class="font-h font-bold text-lg mb-4" x-text="klus&&klus.id?'Klus wijzigen':'Klus inplannen'"></h2>
+      <template x-if="klus">
+        <div>
+          <div class="grid sm:grid-cols-2 gap-3">
+            <div><label class="lbl">Datum</label><input type="date" class="inp mt-1" x-model="klus.datum"></div>
+            <div><label class="lbl">Medewerker</label>
+              <select class="inp mt-1" x-model="klus.user_id">
+                <option value="">Nog niet toegewezen</option>
+                <template x-for="c in planCollegasActief" :key="'pc'+c.id"><option :value="String(c.id)" x-text="c.naam"></option></template>
+              </select>
+            </div>
+            <div><label class="lbl">Van</label><input type="time" class="inp mt-1" x-model="klus.van"></div>
+            <div><label class="lbl">Tot</label><input type="time" class="inp mt-1" x-model="klus.tot"></div>
+          </div>
+          <div class="mt-3">
+            <label class="lbl">Klant</label>
+            <select class="inp mt-1" x-model="klus.keuze" @change="klus.keuze==='vrij'||(klus.klant='')">
+              <option value="vrij">— zelf invullen —</option>
+              <template x-for="k in planKlanten" :key="'pk'+k.id"><option :value="String(k.id)" x-text="k.naam+(k.plaats?' · '+k.plaats:'')"></option></template>
+            </select>
+            <input x-show="klus.keuze==='vrij'" class="inp mt-2" x-model="klus.klant" placeholder="Naam klant">
+          </div>
+          <div class="grid sm:grid-cols-2 gap-3 mt-3">
+            <div><label class="lbl">Omschrijving</label><input class="inp mt-1" x-model="klus.titel" placeholder="Bijv. bestrating leggen"></div>
+            <div><label class="lbl">Soort</label>
+              <select class="inp mt-1" x-model="klus.soort">
+                <option value="klus">Klus</option><option value="bezichtiging">Bezichtiging</option>
+                <option value="onderhoud">Onderhoud</option><option value="intern">Intern</option><option value="verlof">Verlof</option>
+              </select>
+            </div>
+          </div>
+          <div class="mt-3"><label class="lbl">Adres</label><input class="inp mt-1" x-model="klus.adres" placeholder="Straat en plaats"></div>
+          <div class="mt-3"><label class="lbl">Notitie voor het team</label><textarea class="inp mt-1" rows="2" x-model="klus.notitie"></textarea></div>
+
+          <div class="flex gap-2 mt-5">
+            <button class="btn btn-primary flex-1 justify-center" :disabled="klusBusy" @click="bewaarKlus()" x-text="klusBusy?'Bezig…':'Opslaan'"></button>
+            <button class="btn btn-danger" x-show="klus.id" @click="verwijderKlus()">Verwijderen</button>
+            <button class="btn btn-sec" @click="klus=null">Annuleren</button>
+          </div>
+        </div>
+      </template>
+    </div>
+  </div>
+
+  <!-- MEDEWERKER / RECHTEN-MODAL -->
+  <div x-show="medewerker" x-cloak class="modalbg" @click="medewerker=null">
+    <div class="card w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto" @click.stop x-show="medewerker">
+      <template x-if="medewerker">
+        <div>
+          <h2 class="font-h font-bold text-lg mb-1" x-text="medewerker.nieuw?'Medewerker uitnodigen':(medewerker.naam||medewerker.email)"></h2>
+          <p class="text-sm mb-4" style="color:#6B7060" x-text="medewerker.nieuw?'Je collega krijgt een link om zelf een wachtwoord te kiezen.':medewerker.email"></p>
+
+          <template x-if="medewerker.nieuw">
+            <div class="grid sm:grid-cols-2 gap-3 mb-4">
+              <div><label class="lbl">Naam</label><input class="inp mt-1" x-model="medewerker.naam"></div>
+              <div><label class="lbl">E-mailadres</label><input type="email" class="inp mt-1" x-model="medewerker.email"></div>
+            </div>
+          </template>
+
+          <label class="lbl">Rol <span class="normal-case font-normal">(zet de rechten in één klik goed)</span></label>
+          <div class="flex flex-wrap gap-2 mt-1 mb-4">
+            <template x-for="r in ['beheerder','planner','medewerker']" :key="r">
+              <button class="btn btn-sec capitalize" :style="medewerker.rol===r?'border-color:#0B9D46;background:#E4F2E8;color:#087A37':''"
+                      @click="kiesRol(r)" x-text="r"></button>
+            </template>
+          </div>
+
+          <label class="lbl">Toegang</label>
+          <div class="mt-2 space-y-3">
+            <template x-for="g in permGroepen" :key="g.naam">
+              <div>
+                <p class="text-xs font-bold mb-1" style="color:#6B7060" x-text="g.naam"></p>
+                <div class="space-y-1">
+                  <template x-for="p in g.items" :key="p.key">
+                    <label class="flex items-center gap-2.5 p-2 rounded-lg cursor-pointer hover:bg-[#F5F7EE]">
+                      <input type="checkbox" class="w-4 h-4 accent-[#0B9D46]" :value="p.key" x-model="medewerker.rechten">
+                      <span class="text-sm" x-text="p.label"></span>
+                    </label>
+                  </template>
+                </div>
+              </div>
+            </template>
+          </div>
+
+          <template x-if="!medewerker.nieuw">
+            <div class="mt-4 pt-4 border-t" style="border-color:#E6E8DC">
+              <label class="flex items-center gap-2.5 p-2 rounded-lg cursor-pointer hover:bg-[#F5F7EE]">
+                <input type="checkbox" class="w-4 h-4 accent-[#0B9D46]" x-model="medewerker.actief">
+                <span class="text-sm">Account is actief <span style="color:#6B7060">— uitzetten sluit deze medewerker direct buiten</span></span>
+              </label>
+              <button class="btn btn-sec mt-2" @click="herstelLink(medewerker)">Wachtwoord-herstellink sturen</button>
+            </div>
+          </template>
+
+          <div class="flex gap-2 mt-5">
+            <button class="btn btn-primary flex-1 justify-center" :disabled="teamBusy"
+                    @click="medewerker.nieuw?verstuurUitnodiging():bewaarMedewerker()"
+                    x-text="teamBusy?'Bezig…':(medewerker.nieuw?'Uitnodiging versturen':'Opslaan')"></button>
+            <button class="btn btn-sec" x-show="medewerker.nieuw" @click="verstuurUitnodiging(false)">Alleen link</button>
+            <button class="btn btn-sec" @click="medewerker=null">Annuleren</button>
+          </div>
+        </div>
+      </template>
+    </div>
+  </div>
+
+  <!-- LINK-MODAL (uitnodiging zonder mail) -->
+  <div x-show="linkModal" x-cloak class="modalbg" @click="linkModal=null">
+    <div class="card w-full max-w-md p-6" @click.stop x-show="linkModal">
+      <h2 class="font-h font-bold text-lg mb-2" x-text="linkModal&&linkModal.titel"></h2>
+      <p class="text-sm mb-3" style="color:#6B7060" x-text="linkModal&&linkModal.tekst"></p>
+      <p class="text-xs break-all p-3 rounded-lg" style="background:#F5F7EE" x-text="linkModal&&linkModal.link"></p>
+      <div class="flex gap-2 mt-4">
+        <button class="btn btn-primary flex-1 justify-center" @click="kopieer(linkModal.link)">Link kopiëren</button>
+        <button class="btn btn-sec" @click="linkModal=null">Sluiten</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- BEVESTIGING -->
+  <div x-show="vraag" x-cloak class="modalbg" @click="vraag=null">
+    <div class="card w-full max-w-sm p-6" @click.stop x-show="vraag">
+      <h2 class="font-h font-bold text-lg mb-2" x-text="vraag&&vraag.titel"></h2>
+      <p class="text-sm mb-5" style="color:#6B7060" x-text="vraag&&vraag.tekst"></p>
+      <div class="flex gap-2">
+        <button class="btn flex-1 justify-center" :class="vraag&&vraag.gevaar?'btn-danger':'btn-primary'" @click="bevestig()" x-text="vraag&&vraag.ja||'Ja'"></button>
+        <button class="btn btn-sec flex-1 justify-center" @click="vraag=null">Annuleren</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MELDINGEN -->
+  <div class="toastwrap">
+    <template x-for="t in toasts" :key="t.id">
+      <div class="toast" :class="t.soort" x-text="t.tekst"></div>
+    </template>
+  </div>
+
 <script>
 function admin(){return{
-  authed:false, view:'dashboard', pw:'', busy:false, loginErr:'',
+  authed:false, view:'dashboard', busy:false,
+  ik:{id:0,naam:'',email:'',telefoon:'',rol:'',rechten:[]}, perms:[], rollen:{},
   today:new Date().toLocaleDateString('nl-NL',{weekday:'long',day:'numeric',month:'long',year:'numeric'}),
+  vandaagIso:new Date().toLocaleDateString('sv-SE'),
+  // Uren en planning draaien om één gekozen week (maandag als startpunt).
+  weekVan:'', urenRijen:[], collegas:[], klussen:[], urenLoading:false,
+  uur:null, uurBusy:false, weekDetail:null,
+  planShifts:[], planCollegasEcht:[], planKlanten:[], magPlannen:false, klus:null, klusBusy:false,
+  teamUsers:[], teamInvites:[], medewerker:null, teamBusy:false, linkModal:null,
+  pwOud:'', pwNieuw:'',
+  toasts:[], toastId:0, vraag:null,
   leads:[], stages:['nieuw','contact','offerte','ingepland','gewonnen','verloren'], leadsLoading:false,
   quotes:[], quotesLoading:false, invoices:[], invoicesLoading:false,
   products:[], categorien:[], uurtarief:55, prodLoading:false, editing:null, saving:false,
@@ -435,15 +985,25 @@ function admin(){return{
   doc:null, docSaving:false, mailModal:null,
 
   async api(path,opts){ const r=await fetch(path,Object.assign({headers:{'Content-Type':'application/json'}},opts));
-    let d; try{d=await r.json()}catch{d={ok:false,error:'Serverfout ('+r.status+')'}} if(r.status===401){this.authed=false} return d; },
+    let d; try{d=await r.json()}catch{d={ok:false,error:'Serverfout ('+r.status+')'}}
+    if(r.status===401){ this.authed=false; location.href='/inloggen'; } return d; },
+
+  // ── Meldingen en bevestigingen (geen native dialogvensters) ──────────────
+  toast(tekst,soort){ const id=++this.toastId; this.toasts.push({id,tekst,soort:soort||''});
+    setTimeout(()=>{ this.toasts=this.toasts.filter(t=>t.id!==id) },3800); },
+  ok(t){ this.toast(t,'ok') }, mis(t){ this.toast(t,'err') },
+  vraagBevestiging(o){ this.vraag=o },
+  async bevestig(){ const v=this.vraag; this.vraag=null; if(v&&v.actie) await v.actie(); },
   euro(n){return '€ '+(Math.round((+n||0)*100)/100).toLocaleString('nl-NL',{minimumFractionDigits:2,maximumFractionDigits:2})},
   fmt(iso){ if(!iso)return''; const d=new Date(iso); const diff=(Date.now()-d)/1000;
     if(diff<3600)return Math.max(1,Math.round(diff/60))+' min'; if(diff<86400)return Math.round(diff/3600)+' uur';
     return d.toLocaleDateString('nl-NL',{day:'numeric',month:'short'}); },
   fmtDate(iso){ if(!iso)return'—'; try{return new Date(iso).toLocaleDateString('nl-NL',{day:'numeric',month:'short',year:'numeric'})}catch{return iso} },
-  statusStyle(s){ const g={geaccepteerd:1,betaald:1}, r={afgewezen:1,verlopen:1,verloren:1};
-    if(g[s])return'background:#E4F2E8;color:#087A37'; if(r[s])return'background:#fbe4e4;color:#C0392B'; return'background:#FCF3D9;color:#8a6d0b'; },
-  copy(t){ navigator.clipboard&&navigator.clipboard.writeText(t); alert('Link gekopieerd'); },
+  statusStyle(s){ const g={geaccepteerd:1,betaald:1,akkoord:1}, r={afgewezen:1,verlopen:1,verloren:1,afgekeurd:1}, n={concept:1};
+    if(g[s])return'background:#E4F2E8;color:#087A37'; if(r[s])return'background:#fbe4e4;color:#C0392B';
+    if(n[s])return'background:#F5F7EE;color:#6B7060'; return'background:#FCF3D9;color:#8a6d0b'; },
+  copy(t){ this.kopieer(t) },
+  kopieer(t){ if(navigator.clipboard) navigator.clipboard.writeText(t); this.ok('Link gekopieerd'); },
   get productCats(){ return [...new Set(this.products.map(p=>p.categorie))]; },
   get docTotals(){ const rs=(this.doc&&this.doc.regels)||[]; const fb=this.doc?(+this.doc.btw_pct||0):0;
     let sub=0; const per={};
@@ -457,16 +1017,43 @@ function admin(){return{
     return [{l:'Aanvragen totaal',v:this.leads.length,c:'#1F2113'},{l:'Open aanvragen',v:open,c:'#0B9D46'},
       {l:'Openstaande facturen',v:this.euro(openFac),c:'#1F2113'},{l:'Pipeline-waarde',v:this.euro(val),c:'#1F2113'}]; },
 
-  async init(){ const s=await this.api('/api/session'); this.authed=!!(s&&s.authed);
-    if(this.authed){ this.loadLeads(); this.loadProducts(); this.loadQuotes(); this.loadInvoices(); this.loadSettings(); } },
-  async login(){ this.busy=true;this.loginErr=''; const d=await this.api('/api/session',{method:'POST',body:JSON.stringify({password:this.pw})});
-    this.busy=false; if(d.ok){this.authed=true;this.pw='';this.loadLeads();this.loadProducts();this.loadQuotes();this.loadInvoices();this.loadSettings();}else{this.loginErr=d.error||'Mislukt';} },
-  async logout(){ await this.api('/api/session',{method:'DELETE'}); this.authed=false; },
+  async init(){
+    const s=await this.api('/api/session');
+    if(!s||!s.authed){ location.href='/inloggen?terug='+encodeURIComponent(location.pathname); return; }
+    this.authed=true; this.ik=s.user; this.perms=s.perms||[]; this.rollen=s.rollen||{};
+    this.weekVan=this.maandagVan(this.vandaagIso);
+    // Begin op het scherm dat bij je rechten past.
+    this.view = this.mag('leads') ? 'dashboard'
+      : (this.mag('uren_eigen') ? 'uren' : (this.mag('planning_bekijken') ? 'planning' : 'account'));
+    this.loadSettings();
+    if(this.mag('leads')) this.loadLeads();
+    if(this.mag('offertes')) this.loadQuotes();
+    if(this.mag('facturen')) this.loadInvoices();
+    if(this.mag('producten')) this.loadProducts();
+    if(this.view==='uren') this.loadUren(false);
+    else if(this.mag('uren_alle')) this.loadUren(true);
+    if(this.view==='planning') this.loadPlanning();
+  },
+  async logout(){ await this.api('/api/session',{method:'DELETE'}); location.href='/inloggen'; },
+
+  mag(p){ return (this.ik.rechten||[]).includes(p) },
+  get initialen(){ return this.initialenVan(this.ik.naam||this.ik.email) },
+  initialenVan(n){ return String(n||'').trim().split(/[\s@.]+/).filter(Boolean).slice(0,2).map(w=>w[0].toUpperCase()).join('')||'?' },
+  get permGroepen(){ const g=[]; (this.perms||[]).forEach(p=>{ let v=g.find(x=>x.naam===p.groep);
+    if(!v){ v={naam:p.groep,items:[]}; g.push(v) } v.items.push(p) }); return g; },
+
+  // Naar een ander scherm en de bijbehorende gegevens ophalen.
+  ga(v){ this.view=v;
+    if(v==='leads')this.loadLeads(); else if(v==='quotes')this.loadQuotes();
+    else if(v==='invoices')this.loadInvoices(); else if(v==='products')this.loadProducts();
+    else if(v==='uren')this.loadUren(false); else if(v==='urenteam')this.loadUren(true);
+    else if(v==='planning')this.loadPlanning(); else if(v==='team')this.loadTeam(); },
 
   async loadLeads(){ this.leadsLoading=true; const d=await this.api('/api/leads'); this.leadsLoading=false;
     if(d.ok){this.leads=d.leads;this.stages=d.stages||this.stages;} },
   async updateLead(l,patch){ await this.api('/api/leads',{method:'PATCH',body:JSON.stringify(Object.assign({id:l.id},patch))}); },
-  async delLead(l){ if(!confirm('Aanvraag verwijderen?'))return; await this.api('/api/leads',{method:'DELETE',body:JSON.stringify({id:l.id})}); this.leads=this.leads.filter(x=>x.id!==l.id); },
+  delLead(l){ this.vraagBevestiging({ titel:'Aanvraag verwijderen?', tekst:(l.naam||'Deze aanvraag')+' wordt definitief verwijderd.', ja:'Verwijderen', gevaar:true,
+    actie:async()=>{ await this.api('/api/leads',{method:'DELETE',body:JSON.stringify({id:l.id})}); this.leads=this.leads.filter(x=>x.id!==l.id); this.ok('Verwijderd'); } }); },
 
   async loadQuotes(){ this.quotesLoading=true; const d=await this.api('/api/quotes'); this.quotesLoading=false; if(d.ok)this.quotes=d.quotes; },
   async loadInvoices(){ this.invoicesLoading=true; const d=await this.api('/api/invoices'); this.invoicesLoading=false; if(d.ok)this.invoices=d.invoices; },
@@ -484,7 +1071,7 @@ function admin(){return{
       datePick:this.isoPlusDays(30) };
     this.view='quotes';
   },
-  async editDoc(kind,id){ const d=await this.api('/api/'+(kind==='quote'?'quotes':'invoices')+'?id='+id); if(!d.ok)return alert(d.error||'Kon niet laden');
+  async editDoc(kind,id){ const d=await this.api('/api/'+(kind==='quote'?'quotes':'invoices')+'?id='+id); if(!d.ok)return this.mis(d.error||'Kon niet laden');
     const o=kind==='quote'?d.quote:d.invoice; o.kind=kind; o.datePick=(kind==='quote'?o.geldig_tot:o.vervaldatum||'').slice(0,10);
     const fb=o.btw_pct!=null?o.btw_pct:21;
     o.regels=(o.regels&&o.regels.length?o.regels:[{omschrijving:'',aantal:1,eenheid:'',prijs:0}]).map(r=>({...r,btw:r.btw!=null?r.btw:fb}));
@@ -497,25 +1084,30 @@ function admin(){return{
     if(this.doc.id){ body.id=this.doc.id; d=await this.api('/api/'+(isQ?'quotes':'invoices'),{method:'PATCH',body:JSON.stringify(body)}); }
     else { if(this.doc.lead_id)body.lead_id=this.doc.lead_id; if(isQ)body.geldig_dagen=null; d=await this.api('/api/'+(isQ?'quotes':'invoices'),{method:'POST',body:JSON.stringify(body)}); }
     this.docSaving=false;
-    if(!d.ok)return alert(d.error||'Opslaan mislukt');
+    if(!d.ok)return this.mis(d.error||'Opslaan mislukt');
     isQ?this.loadQuotes():this.loadInvoices(); if(this.doc.lead_id)this.loadLeads();
     // Houd de modal open op een net-aangemaakt document zodat versturen/printen direct kan
     if(!this.doc.id&&d.id){ await this.editDoc(kind,d.id); } else { this.doc=null; }
   },
-  async delDoc(kind,row){ if(!confirm(row.nummer+' verwijderen?'))return; await this.api('/api/'+(kind==='quote'?'quotes':'invoices'),{method:'DELETE',body:JSON.stringify({id:row.id})});
-    kind==='quote'?this.loadQuotes():this.loadInvoices(); },
+  delDoc(kind,row){ this.vraagBevestiging({ titel:row.nummer+' verwijderen?', tekst:'Dit document wordt definitief verwijderd.', ja:'Verwijderen', gevaar:true,
+    actie:async()=>{ await this.api('/api/'+(kind==='quote'?'quotes':'invoices'),{method:'DELETE',body:JSON.stringify({id:row.id})});
+      kind==='quote'?this.loadQuotes():this.loadInvoices(); this.ok('Verwijderd'); } }); },
   openDoc(kind,row){ window.open('/api/document?type='+(kind==='quote'?'quote':'invoice')+'&token='+row.token,'_blank'); },
   async setDocStatus(kind,row,status){ await this.api('/api/'+(kind==='quote'?'quotes':'invoices'),{method:'PATCH',body:JSON.stringify({id:row.id,status:status})}); },
-  async invoiceFromQuote(q){ if(!confirm('Factuur maken van '+q.nummer+'?'))return;
-    const d=await this.api('/api/invoices',{method:'POST',body:JSON.stringify({quote_id:q.id})});
-    if(!d.ok)return alert(d.error||'Mislukt'); this.loadInvoices(); this.view='invoices'; alert('Factuur '+d.nummer+' aangemaakt.'); },
+  invoiceFromQuote(q){ this.vraagBevestiging({ titel:'Factuur maken?', tekst:'Van offerte '+q.nummer+' wordt een nieuwe factuur aangemaakt.', ja:'Factuur maken',
+    actie:async()=>{ const d=await this.api('/api/invoices',{method:'POST',body:JSON.stringify({quote_id:q.id})});
+      if(!d.ok)return this.mis(d.error||'Mislukt');
+      this.loadInvoices(); this.view='invoices'; this.ok('Factuur '+d.nummer+' aangemaakt'); } }); },
 
-  async sendDoc(kind,row){
-    if(!row.klant_email){ if(!confirm('Er is geen e-mailadres ingevuld. Toch doorgaan (u kunt de link kopiëren)?'))return; }
-    const d=await this.api('/api/mail',{method:'POST',body:JSON.stringify({type:kind==='quote'?'quote':'invoice',id:row.id})});
-    if(!d.ok)return alert(d.error||'Versturen mislukt');
-    if(d.sent){ alert('Verstuurd naar de klant.'); kind==='quote'?this.loadQuotes():this.loadInvoices(); }
-    else { this.mailModal={type:kind==='quote'?'quote':'invoice',id:row.id,link:d.link,mailto:d.mailto}; }
+  sendDoc(kind,row){
+    const verstuur=async()=>{
+      const d=await this.api('/api/mail',{method:'POST',body:JSON.stringify({type:kind==='quote'?'quote':'invoice',id:row.id})});
+      if(!d.ok)return this.mis(d.error||'Versturen mislukt');
+      if(d.sent){ this.ok('Verstuurd naar de klant'); kind==='quote'?this.loadQuotes():this.loadInvoices(); }
+      else { this.mailModal={type:kind==='quote'?'quote':'invoice',id:row.id,link:d.link,mailto:d.mailto}; }
+    };
+    if(!row.klant_email) return this.vraagBevestiging({ titel:'Geen e-mailadres', tekst:'Bij deze klant staat geen e-mailadres. Je krijgt dan een link die je zelf kunt doorsturen.', ja:'Doorgaan', actie:verstuur });
+    verstuur();
   },
   async markSent(m){ await this.api('/api/quotes',{method:'PATCH',body:JSON.stringify({id:m.id,status:'verzonden'})}); this.mailModal=null; this.loadQuotes(); },
 
@@ -525,8 +1117,9 @@ function admin(){return{
   editProduct(p){ this.editing=JSON.parse(JSON.stringify(p)); if(this.editing.btw==null)this.editing.btw=21; },
   async saveProduct(){ this.saving=true; const m=this.editing.id?'PUT':'POST';
     const d=await this.api('/api/products',{method:m,body:JSON.stringify(this.editing)}); this.saving=false;
-    if(d.ok){this.editing=null;this.loadProducts();}else{alert(d.error||'Opslaan mislukt');} },
-  async delProduct(p){ if(!confirm('“'+p.naam+'” verwijderen?'))return; await this.api('/api/products',{method:'DELETE',body:JSON.stringify({id:p.id})}); this.products=this.products.filter(x=>x.id!==p.id); },
+    if(d.ok){this.editing=null;this.loadProducts();this.ok('Opgeslagen');}else{this.mis(d.error||'Opslaan mislukt');} },
+  delProduct(p){ this.vraagBevestiging({ titel:'Product verwijderen?', tekst:'“'+p.naam+'” wordt uit de lijst gehaald.', ja:'Verwijderen', gevaar:true,
+    actie:async()=>{ await this.api('/api/products',{method:'DELETE',body:JSON.stringify({id:p.id})}); this.products=this.products.filter(x=>x.id!==p.id); this.ok('Verwijderd'); } }); },
   onFoto(e){ const f=e.target.files[0]; if(!f)return; const img=new Image(); const rd=new FileReader();
     rd.onload=()=>{ img.onload=()=>{ let{width:w,height:h}=img; const M=900; if(w>M||h>M){const s=M/Math.max(w,h);w=w*s|0;h=h*s|0;}
       const c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(img,0,0,w,h);
@@ -534,7 +1127,186 @@ function admin(){return{
 
   async loadSettings(){ const d=await this.api('/api/settings'); if(d.ok){ this.uurtarief=d.uurtarief; if(d.bedrijf)this.bedrijf=Object.assign(this.bedrijf,d.bedrijf); this.mailProvider=d.mailProvider; } },
   async saveSettings(){ const d=await this.api('/api/settings',{method:'PUT',body:JSON.stringify({uurtarief:this.uurtarief,bedrijf:this.bedrijf})});
-    if(d.ok){this.loadProducts();this.loadSettings();alert('Opgeslagen');}else{alert(d.error||'Opslaan mislukt');} },
+    if(d.ok){this.loadProducts();this.loadSettings();this.ok('Opgeslagen');}else{this.mis(d.error||'Opslaan mislukt');} },
+
+  // ══ Weekbalk (gedeeld door uren en planning) ═══════════════════════════════
+  maandagVan(iso){ const d=new Date(iso+'T00:00:00'); const dag=d.getDay()||7;
+    d.setDate(d.getDate()-(dag-1)); return d.toLocaleDateString('sv-SE'); },
+  dagPlus(iso,n){ const d=new Date(iso+'T00:00:00'); d.setDate(d.getDate()+n); return d.toLocaleDateString('sv-SE'); },
+  get weekTot(){ return this.dagPlus(this.weekVan,6) },
+  get weekDagen(){ const uit=[];
+    for(let i=0;i<7;i++){ const iso=this.dagPlus(this.weekVan,i); const d=new Date(iso+'T00:00:00');
+      uit.push({ iso,
+        label:d.toLocaleDateString('nl-NL',{weekday:'long',day:'numeric',month:'long'}),
+        kort:d.toLocaleDateString('nl-NL',{weekday:'short',day:'numeric'}),
+        kort2:d.toLocaleDateString('nl-NL',{weekday:'short',day:'numeric',month:'short'}),
+        vandaag: iso===this.vandaagIso });
+    } return uit; },
+  get weekLabel(){ const a=new Date(this.weekVan+'T00:00:00'), b=new Date(this.weekTot+'T00:00:00');
+    return a.toLocaleDateString('nl-NL',{day:'numeric',month:'long'})+' t/m '+b.toLocaleDateString('nl-NL',{day:'numeric',month:'long',year:'numeric'}); },
+  weekVerzet(n){ this.weekVan=this.dagPlus(this.weekVan,7*n); this.laadWeek(); },
+  weekNu(){ this.weekVan=this.maandagVan(this.vandaagIso); this.laadWeek(); },
+  laadWeek(){ if(this.view==='uren')this.loadUren(false); else if(this.view==='urenteam')this.loadUren(true);
+    else if(this.view==='planning')this.loadPlanning(); },
+  dagKort(iso){ return new Date(iso+'T00:00:00').toLocaleDateString('nl-NL',{weekday:'short',day:'numeric',month:'short'}) },
+  urenTekst(n){ const u=Math.round((+n||0)*100)/100; return String(u).replace('.',',')+' uur' },
+
+  // ══ Mijn uren ══════════════════════════════════════════════════════════════
+  async loadUren(iedereen){ this.urenLoading=true;
+    const d=await this.api('/api/hours?van='+this.weekVan+'&tot='+this.weekTot+(iedereen?'&iedereen=1':''));
+    this.urenLoading=false;
+    if(!d.ok) return this.mis(d.error||'Uren konden niet geladen worden.');
+    this.urenRijen=d.uren||[]; this.collegas=d.collegas||[]; this.klussen=d.klussen||[]; },
+
+  get mijnUren(){ return this.urenRijen.filter(r=>r.user_id===this.ik.id) },
+  urenVanDag(iso){ return this.mijnUren.filter(r=>r.datum===iso) },
+  dagTotaal(iso){ return this.urenVanDag(iso).reduce((s,r)=>s+(+r.uren||0),0) },
+  get weekTotaal(){ return this.mijnUren.reduce((s,r)=>s+(+r.uren||0),0) },
+  statusVan(rijen){ if(!rijen.length) return 'concept';
+    if(rijen.every(r=>r.status==='akkoord')) return 'akkoord';
+    if(rijen.some(r=>r.status==='ingediend')) return 'ingediend';
+    if(rijen.some(r=>r.status==='afgekeurd')) return 'afgekeurd';
+    return 'concept'; },
+  get weekStatus(){ return this.statusVan(this.mijnUren) },
+  get weekOpen(){ return this.weekStatus==='concept'||this.weekStatus==='afgekeurd' },
+  get weekNote(){ const r=this.mijnUren.find(r=>r.status==='afgekeurd'&&r.beoordeling_note); return r?r.beoordeling_note:'' },
+  statusTekst(s){ return {concept:'Nog niet ingediend',ingediend:'Ingediend',akkoord:'Goedgekeurd',afgekeurd:'Afgekeurd'}[s]||s },
+  regelTekst(r){ return [r.lead_naam||r.project||'', r.omschrijving||''].filter(Boolean).join(' — ')||'—' },
+  get klantKeuzes(){ const uit=[], gezien={};
+    (this.klussen||[]).forEach(k=>{ if(k.lead_id&&!gezien['l'+k.lead_id]){ gezien['l'+k.lead_id]=1; uit.push({id:k.lead_id,naam:k.lead_naam||k.klant||k.titel||('Klus '+k.id),plaats:''}); } });
+    (this.leads||[]).forEach(l=>{ if(!gezien['l'+l.id]){ gezien['l'+l.id]=1; uit.push({id:l.id,naam:l.naam||('Aanvraag '+l.id),plaats:l.plaats||''}); } });
+    return uit; },
+
+  leegUur(iso){ return {datum:iso||this.vandaagIso,soort:'werk',start:'',eind:'',pauze:0,uren:0,keuze:'vrij',project:'',omschrijving:''} },
+  nieuwUur(iso){ this.uur=this.leegUur(iso) },
+  bewerkUur(r){ this.uur={...r, keuze:r.lead_id?String(r.lead_id):'vrij', project:r.project||'', pauze:r.pauze||0} },
+  uurVanKlus(k){ this.uur=Object.assign(this.leegUur(k.datum),{
+    start:k.van||'', eind:k.tot||'', keuze:k.lead_id?String(k.lead_id):'vrij',
+    project:k.lead_id?'':(k.klant||k.titel||''), omschrijving:k.titel||'', shift_id:k.id }); },
+  get berekend(){ const u=this.uur; if(!u||!u.start||!u.eind) return 0;
+    const [su,sm]=u.start.split(':').map(Number), [eu,em]=u.eind.split(':').map(Number);
+    let min=(eu*60+em)-(su*60+sm); if(min<0)min+=1440; min-=Math.max(0,+u.pauze||0);
+    return Math.max(0,Math.round(min/0.6)/100); },
+  async bewaarUur(){
+    const u=this.uur; this.uurBusy=true;
+    const body={ datum:u.datum, soort:u.soort, start:u.start||null, eind:u.eind||null, pauze:u.pauze||0,
+      uren:(u.start&&u.eind)?0:(u.uren||0), omschrijving:u.omschrijving||'', shift_id:u.shift_id||null,
+      lead_id:u.keuze&&u.keuze!=='vrij'?+u.keuze:null, project:u.keuze==='vrij'?(u.project||''):'' };
+    const d=u.id ? await this.api('/api/hours',{method:'PATCH',body:JSON.stringify({...body,id:u.id})})
+                 : await this.api('/api/hours',{method:'POST',body:JSON.stringify(body)});
+    this.uurBusy=false;
+    if(!d.ok) return this.mis(d.error||'Opslaan mislukt');
+    this.uur=null; this.ok('Uren opgeslagen'); this.loadUren(this.view==='urenteam'); },
+  verwijderUur(r){ this.vraagBevestiging({ titel:'Uren verwijderen?', tekst:this.dagKort(r.datum)+' · '+this.urenTekst(r.uren), ja:'Verwijderen', gevaar:true,
+    actie:async()=>{ const d=await this.api('/api/hours',{method:'DELETE',body:JSON.stringify({id:r.id})});
+      if(!d.ok) return this.mis(d.error||'Verwijderen mislukt'); this.ok('Verwijderd'); this.loadUren(this.view==='urenteam'); } }); },
+  weekIndienen(){ this.vraagBevestiging({ titel:'Week indienen?', tekst:'Je uren van '+this.weekLabel+' gaan naar je beheerder. Daarna kun je ze niet meer zelf wijzigen.', ja:'Indienen',
+    actie:async()=>{ const d=await this.api('/api/hours',{method:'PATCH',body:JSON.stringify({action:'indienen',week:this.isoWeekVan(this.weekVan)})});
+      if(!d.ok) return this.mis(d.error||'Indienen mislukt'); this.ok('Week ingediend'); this.loadUren(false); } }); },
+  // Zelfde ISO-weeknotatie als de server ('2026-W33').
+  isoWeekVan(iso){ const d=new Date(iso+'T00:00:00Z'); const dag=d.getUTCDay()||7;
+    d.setUTCDate(d.getUTCDate()+4-dag); const start=new Date(Date.UTC(d.getUTCFullYear(),0,1));
+    const w=Math.ceil(((d-start)/86400000+1)/7);
+    return d.getUTCFullYear()+'-W'+String(w).padStart(2,'0'); },
+
+  // ══ Urenoverzicht van het team ═════════════════════════════════════════════
+  rijenVan(userId){ return this.urenRijen.filter(r=>r.user_id===userId) },
+  teamDag(userId,iso){ return this.urenRijen.filter(r=>r.user_id===userId&&r.datum===iso).reduce((s,r)=>s+(+r.uren||0),0) },
+  teamTotaal(userId){ return this.rijenVan(userId).reduce((s,r)=>s+(+r.uren||0),0) },
+  teamStatus(userId){ return this.statusVan(this.rijenVan(userId)) },
+  teamDagAlles(iso){ return this.urenRijen.filter(r=>r.datum===iso).reduce((s,r)=>s+(+r.uren||0),0) },
+  get teamWeekAlles(){ return this.urenRijen.reduce((s,r)=>s+(+r.uren||0),0) },
+  get teIndienen(){ return this.collegas.filter(c=>this.teamStatus(c.id)==='ingediend').length },
+  openMedewerkerWeek(c){ const rijen=this.rijenVan(c.id);
+    this.weekDetail={ id:c.id, naam:c.naam||c.email, rijen, totaal:rijen.reduce((s,r)=>s+(+r.uren||0),0),
+      status:this.statusVan(rijen), note:'' }; },
+  async beoordeel(wat){ const w=this.weekDetail;
+    const body={ action: wat==='heropenen'?'heropenen':'beoordelen', user_id:w.id, week:this.isoWeekVan(this.weekVan), note:w.note||'' };
+    if(wat!=='heropenen') body.status=wat;
+    const d=await this.api('/api/hours',{method:'PATCH',body:JSON.stringify(body)});
+    if(!d.ok) return this.mis(d.error||'Mislukt');
+    this.weekDetail=null;
+    this.ok(wat==='akkoord'?'Week goedgekeurd':(wat==='afgekeurd'?'Week afgekeurd':'Week heropend'));
+    this.loadUren(true); },
+  exporteerUren(){ window.open('/api/hours?van='+this.weekVan+'&tot='+this.weekTot+'&iedereen=1&export=csv','_blank') },
+
+  // ══ Planning ═══════════════════════════════════════════════════════════════
+  async loadPlanning(){ const d=await this.api('/api/planning?van='+this.weekVan+'&tot='+this.weekTot);
+    if(!d.ok) return this.mis(d.error||'Planning kon niet geladen worden.');
+    this.planShifts=d.shifts||[]; this.planCollegasEcht=d.collegas||[]; this.planKlanten=d.klanten||[]; this.magPlannen=!!d.magBeheren; },
+  get planCollegas(){ const l=(this.planCollegasEcht||[]).slice();
+    if(this.planShifts.some(s=>!s.user_id)) l.push({id:0,naam:''}); return l; },
+  // Alleen actieve medewerkers kun je nog nieuw inplannen.
+  get planCollegasActief(){ return (this.planCollegasEcht||[]).filter(c=>c.actief!==0) },
+  klussenVanDag(iso){ return this.planShifts.filter(s=>s.datum===iso) },
+  roosterRij(c){ const cellen=[{kop:true,key:'kop'+c.id}];
+    this.weekDagen.forEach(d=>{ cellen.push({ key:c.id+'_'+d.iso, iso:d.iso, vandaag:d.vandaag,
+      klussen:this.planShifts.filter(s=>s.datum===d.iso&&((s.user_id||0)===c.id)) }); });
+    return cellen; },
+  nieuweKlus(iso,userId){ if(!this.magPlannen) return;
+    this.klus={datum:iso||this.vandaagIso,van:'08:00',tot:'16:30',user_id:userId?String(userId):'',
+      titel:'',keuze:'vrij',klant:'',adres:'',notitie:'',soort:'klus'}; },
+  bewerkKlus(s){ if(!this.magPlannen) return this.toast((s.lead_naam||s.klant||s.titel||'Klus')+(s.adres?(' · '+s.adres):''));
+    this.klus={...s, user_id:s.user_id?String(s.user_id):'', keuze:s.lead_id?String(s.lead_id):'vrij'}; },
+  async bewaarKlus(){ const k=this.klus; this.klusBusy=true;
+    const body={ datum:k.datum, van:k.van||null, tot:k.tot||null, user_id:k.user_id?+k.user_id:null,
+      titel:k.titel||'', soort:k.soort||'klus', adres:k.adres||'', notitie:k.notitie||'',
+      lead_id:k.keuze&&k.keuze!=='vrij'?+k.keuze:null, klant:k.keuze==='vrij'?(k.klant||''):'' };
+    const d=k.id ? await this.api('/api/planning',{method:'PATCH',body:JSON.stringify({...body,id:k.id})})
+                 : await this.api('/api/planning',{method:'POST',body:JSON.stringify(body)});
+    this.klusBusy=false;
+    if(!d.ok) return this.mis(d.error||'Opslaan mislukt');
+    this.klus=null; this.ok('Planning bijgewerkt'); this.loadPlanning(); },
+  verwijderKlus(){ const k=this.klus;
+    this.vraagBevestiging({ titel:'Klus verwijderen?', tekst:this.dagKort(k.datum)+' · '+(k.lead_naam||k.klant||k.titel||'Klus'), ja:'Verwijderen', gevaar:true,
+      actie:async()=>{ const d=await this.api('/api/planning',{method:'DELETE',body:JSON.stringify({id:k.id})});
+        if(!d.ok) return this.mis(d.error||'Verwijderen mislukt'); this.klus=null; this.ok('Verwijderd'); this.loadPlanning(); } }); },
+
+  // ══ Medewerkers ════════════════════════════════════════════════════════════
+  async loadTeam(){ const d=await this.api('/api/team');
+    if(!d.ok) return this.mis(d.error||'Medewerkers konden niet geladen worden.');
+    this.teamUsers=d.users||[]; this.teamInvites=d.invites||[]; if(d.perms)this.perms=d.perms; if(d.rollen)this.rollen=d.rollen; },
+  nieuweUitnodiging(){ this.medewerker={nieuw:true,naam:'',email:'',rol:'medewerker',rechten:(this.rollen.medewerker||[]).slice(),actief:true} },
+  openMedewerker(u){ this.medewerker={...u, rechten:(u.rechten||[]).slice()} },
+  kiesRol(r){ this.medewerker.rol=r; this.medewerker.rechten=(this.rollen[r]||[]).slice(); },
+  async verstuurUitnodiging(mail){ const m=this.medewerker; this.teamBusy=true;
+    const d=await this.api('/api/team',{method:'POST',body:JSON.stringify({action:'uitnodigen',
+      naam:m.naam, email:m.email, rol:m.rol, rechten:m.rechten, mail:mail!==false })});
+    this.teamBusy=false;
+    if(!d.ok) return this.mis(d.error||'Uitnodigen mislukt');
+    this.medewerker=null; this.loadTeam();
+    if(d.mail&&d.mail.sent){ this.ok('Uitnodiging gemaild naar '+m.email); }
+    else { this.linkModal={ titel:'Uitnodigingslink', link:d.link,
+      tekst:(d.mail&&d.mail.error) ? ('De mail kon niet verstuurd worden ('+d.mail.error+'). Stuur deze link zelf door.')
+        : 'Stuur deze link naar je collega. De link is 7 dagen geldig en werkt één keer.' }; } },
+  async bewaarMedewerker(){ const m=this.medewerker; this.teamBusy=true;
+    const d=await this.api('/api/team',{method:'PATCH',body:JSON.stringify({id:m.id,naam:m.naam,rol:m.rol,rechten:m.rechten,actief:!!m.actief})});
+    this.teamBusy=false;
+    if(!d.ok) return this.mis(d.error||'Opslaan mislukt');
+    this.medewerker=null; this.ok('Rechten bijgewerkt'); this.loadTeam();
+    if(d.user&&d.user.id===this.ik.id) this.ik.rechten=d.user.rechten; },
+  async herstelLink(u){ const d=await this.api('/api/team',{method:'POST',body:JSON.stringify({action:'reset',id:u.id})});
+    if(!d.ok) return this.mis(d.error||'Mislukt');
+    this.medewerker=null; this.loadTeam();
+    if(d.mail&&d.mail.sent) this.ok('Herstellink gemaild naar '+u.email);
+    else this.linkModal={ titel:'Herstellink', link:d.link, tekst:'Stuur deze link naar '+(u.naam||u.email)+'. De link is 7 dagen geldig.' }; },
+  async opnieuwSturen(i){ const d=await this.api('/api/team',{method:'POST',body:JSON.stringify({action:'opnieuw',id:i.id})});
+    if(!d.ok) return this.mis(d.error||'Mislukt');
+    if(d.mail&&d.mail.sent) this.ok('Opnieuw gemaild naar '+i.email);
+    else this.linkModal={ titel:'Uitnodigingslink', link:d.link, tekst:'De mail kon niet verstuurd worden. Stuur deze link zelf door.' };
+    this.loadTeam(); },
+  trekIn(i){ this.vraagBevestiging({ titel:'Uitnodiging intrekken?', tekst:i.email+' kan dan geen account meer aanmaken met deze link.', ja:'Intrekken', gevaar:true,
+    actie:async()=>{ const d=await this.api('/api/team',{method:'DELETE',body:JSON.stringify({invite_id:i.id})});
+      if(!d.ok) return this.mis(d.error||'Mislukt'); this.ok('Ingetrokken'); this.loadTeam(); } }); },
+
+  // ══ Mijn account ═══════════════════════════════════════════════════════════
+  async profielOpslaan(){ const d=await this.api('/api/session',{method:'POST',body:JSON.stringify({action:'profiel',naam:this.ik.naam,telefoon:this.ik.telefoon})});
+    if(d.ok) this.ok('Opgeslagen'); else this.mis(d.error||'Opslaan mislukt'); },
+  async wachtwoordWijzigen(){
+    if((this.pwNieuw||'').length<10) return this.mis('Kies een wachtwoord van minimaal 10 tekens.');
+    const d=await this.api('/api/session',{method:'POST',body:JSON.stringify({action:'wachtwoord',huidig:this.pwOud,nieuw:this.pwNieuw})});
+    if(!d.ok) return this.mis(d.error||'Wijzigen mislukt');
+    this.pwOud=''; this.pwNieuw=''; this.ok('Wachtwoord gewijzigd'); },
 }}
 </script>
 </body>
