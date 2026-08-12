@@ -80,9 +80,12 @@ export default async function handler(req, res) {
 
       // Actieve medewerkers plus iedereen die in deze periode uren heeft staan —
       // anders vallen de uren van een uit dienst getreden collega uit het overzicht.
+      // MHS-accounts (via='sso') horen bij het bureau en zijn geen personeel: die
+      // blijven eruit, tenzij er toevallig toch uren van ze in de periode staan.
       const collegas = magAlles
         ? (await db.q(`SELECT id,naam,email,actief FROM users
-             WHERE actief=1 OR id IN (SELECT DISTINCT user_id FROM hours WHERE datum BETWEEN ? AND ?)
+             WHERE (actief=1 AND COALESCE(via,'lokaal')<>'sso')
+                OR id IN (SELECT DISTINCT user_id FROM hours WHERE datum BETWEEN ? AND ?)
              ORDER BY actief DESC, naam COLLATE NOCASE`, [van, tot]))
         : [{ id: ik.id, naam: ik.naam, email: ik.email, actief: 1 }];
       // De klussen waarvoor je in deze week bent ingepland: daarmee vult een

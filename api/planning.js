@@ -40,8 +40,11 @@ export default async function handler(req, res) {
          WHERE ${where} ORDER BY s.datum, s.van, s.id`, args);
       // Actieve medewerkers plus iedereen die in deze week nog ingepland staat,
       // zodat werk van een uit dienst getreden collega niet uit beeld verdwijnt.
+      // MHS-accounts (via='sso') zijn geen personeel en staan hier niet tussen,
+      // tenzij er voor deze week toch een klus op hun naam staat.
       const collegas = await db.q(`SELECT id,naam,actief FROM users
-        WHERE actief=1 OR id IN (SELECT DISTINCT user_id FROM shifts WHERE datum BETWEEN ? AND ?)
+        WHERE (actief=1 AND COALESCE(via,'lokaal')<>'sso')
+           OR id IN (SELECT DISTINCT user_id FROM shifts WHERE datum BETWEEN ? AND ?)
         ORDER BY actief DESC, naam COLLATE NOCASE`, [van, tot]);
       // Klantenlijst alleen voor wie de planning maakt (en dus een klus koppelt).
       const klanten = magBeheren
