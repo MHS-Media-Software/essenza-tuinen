@@ -81,6 +81,9 @@ export default async function handler(req, res) {
         const doel = (await db.q('SELECT * FROM users WHERE id=?', [+b.id || 0]))[0];
         if (!doel || !doel.actief) return res.status(404).json({ ok: false, error: 'Deze medewerker is niet (meer) actief.' });
         if (doel.id === ik.id) return res.status(400).json({ ok: false, error: 'Je bekijkt je eigen dashboard al.' });
+        if ((doel.via || 'lokaal') === 'sso' && (ik.via || 'lokaal') !== 'sso') {
+          return res.status(403).json({ ok: false, error: 'Dit account hoort bij MHS Media.' });
+        }
         db.setAuthCookie(res, doel, ik.id);
         return res.status(200).json({ ok: true, naam: doel.naam || doel.email });
       }

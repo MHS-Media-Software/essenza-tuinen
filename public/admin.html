@@ -606,7 +606,7 @@
         </div>
 
         <div class="card divide-y mb-4" style="border-color:#E6E8DC">
-          <template x-for="u in teamBeoordeeld" :key="u.id">
+          <template x-for="u in eigenPersoneel" :key="u.id">
             <div class="p-4 flex flex-wrap items-center gap-3">
               <span class="w-9 h-9 rounded-full grid place-items-center font-bold text-xs shrink-0"
                     :style="u.actief?'background:#E4F2E8;color:#087A37':'background:#EDEFE6;color:#9aa08d'" x-text="initialenVan(u.naam||u.email)"></span>
@@ -617,7 +617,6 @@
                 </p>
                 <p class="text-xs truncate" style="color:#6B7060" x-text="u.email"></p>
               </div>
-              <span x-show="u.via==='sso'" class="pill zin" style="background:#E8EEF8;color:#2c5aa0">MHS-team</span>
               <span class="pill capitalize" style="background:#F5F7EE;color:#4b5043" x-text="u.rol"></span>
               <span class="pill zin" :style="u.actief?'background:#E4F2E8;color:#087A37':'background:#EDEFE6;color:#6B7060'" x-text="u.actief?'Actief':'Non-actief'"></span>
               <span class="text-xs hidden sm:block w-28" style="color:#9aa08d" x-text="u.last_login?('laatst: '+fmt(u.last_login)):'nog niet ingelogd'"></span>
@@ -625,6 +624,34 @@
               <button class="btn btn-sec !py-1.5" @click="openMedewerker(u)">Rechten</button>
             </div>
           </template>
+        </div>
+
+        <!-- MHS Media: het bureau, geen personeel van de klant -->
+        <div class="card p-5 mb-4" x-show="mhsAccounts.length" style="border-color:#c7d6ee;background:#F9FBFF">
+          <div class="flex items-center gap-2 mb-1">
+            <span class="pill zin" style="background:#E8EEF8;color:#2c5aa0">MHS-team</span>
+            <h2 class="font-h font-bold">MHS Media</h2>
+          </div>
+          <p class="text-xs mb-3" style="color:#6B7060"
+             x-text="benTeam ? 'Accounts van het bureau. Alleen MHS-teamleden kunnen deze wijzigen of verwijderen.'
+                             : 'Dit zijn de accounts van je websitebouwer. Ze worden door MHS Media zelf beheerd en tellen niet mee als personeel.'"></p>
+          <div class="divide-y" style="border-color:#E6E8DC">
+            <template x-for="u in mhsAccounts" :key="'mhs'+u.id">
+              <div class="flex flex-wrap items-center gap-3 py-2.5">
+                <span class="w-9 h-9 rounded-full grid place-items-center font-bold text-xs shrink-0" style="background:#E8EEF8;color:#2c5aa0" x-text="initialenVan(u.naam||u.email)"></span>
+                <div class="min-w-0 flex-1">
+                  <p class="font-semibold text-sm truncate">
+                    <span x-text="u.naam||u.email"></span>
+                    <span x-show="u.id===ik.id" class="text-xs font-normal" style="color:#6B7060">(jij)</span>
+                  </p>
+                  <p class="text-xs truncate" style="color:#6B7060" x-text="u.email"></p>
+                </div>
+                <span class="text-xs hidden sm:block w-28" style="color:#9aa08d" x-text="u.last_login?('laatst: '+fmt(u.last_login)):'nog niet ingelogd'"></span>
+                <button class="btn btn-sec !py-1.5" x-show="benTeam && u.actief && u.id!==ik.id" @click="bekijkAlsMedewerker(u)">Bekijk als</button>
+                <button class="btn btn-sec !py-1.5" x-show="benTeam" @click="openMedewerker(u)">Rechten</button>
+              </div>
+            </template>
+          </div>
         </div>
 
         <!-- Alleen zichtbaar voor MHS-teamleden: support-acties -->
@@ -1446,6 +1473,8 @@ function admin(){return{
   get benTeam(){ return this.ik.via==='sso' },
   get klantBeheerders(){ return this.teamUsers.filter(u=>u.via!=='sso' && u.actief && u.status!=='wacht' && (u.rechten||[]).includes('team')) },
   get teamBeoordeeld(){ return this.teamUsers.filter(u=>u.status!=='wacht') },
+  get eigenPersoneel(){ return this.teamBeoordeeld.filter(u=>u.via!=='sso') },
+  get mhsAccounts(){ return this.teamBeoordeeld.filter(u=>u.via==='sso') },
 
   nieuweUitnodiging(){ this.medewerker={nieuw:true,rol:'medewerker',rechten:(this.rollen.medewerker||[]).slice()} },
   openMedewerker(u){ this.medewerker={...u, rechten:(u.rechten||[]).slice()} },

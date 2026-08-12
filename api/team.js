@@ -14,6 +14,12 @@ function rij(u) {
   };
 }
 
+// MHS-accounts (via Google-SSO) horen bij het bureau, niet bij de klant: alleen
+// een ander MHS-account mag ze wijzigen of verwijderen.
+function magNietAanMHS(ik, doel) {
+  return (doel.via || 'lokaal') === 'sso' && (ik.via || 'lokaal') !== 'sso';
+}
+
 // Er moet altijd minstens één actieve beheerder overblijven die het team beheert.
 async function laatsteBeheerder(userId) {
   const rows = await db.q("SELECT id, rechten FROM users WHERE actief=1 AND id<>?", [userId]);
@@ -103,6 +109,9 @@ export default async function handler(req, res) {
       const id = +b.id || 0;
       const u = (await db.q('SELECT * FROM users WHERE id=?', [id]))[0];
       if (!u) return res.status(404).json({ ok: false, error: 'Medewerker niet gevonden.' });
+      if (magNietAanMHS(ik, u)) {
+        return res.status(403).json({ ok: false, error: 'Dit account hoort bij MHS Media en wordt daar beheerd.' });
+      }
 
       // ── Nieuw aangemeld account goedkeuren of weigeren ──────────────────
       if (b.actie === 'goedkeuren' || b.actie === 'afkeuren') {
@@ -160,6 +169,9 @@ export default async function handler(req, res) {
       const id = +b.id || 0;
       const u = (await db.q('SELECT * FROM users WHERE id=?', [id]))[0];
       if (!u) return res.status(404).json({ ok: false, error: 'Medewerker niet gevonden.' });
+      if (magNietAanMHS(ik, u)) {
+        return res.status(403).json({ ok: false, error: 'Dit account hoort bij MHS Media en kan alleen door MHS zelf verwijderd worden.' });
+      }
       if (id === ik.id) return res.status(400).json({ ok: false, error: 'Je kunt je eigen account niet verwijderen.' });
       if (await laatsteBeheerder(id)) {
         return res.status(400).json({ ok: false, error: 'Er moet minstens één beheerder blijven die medewerkers kan beheren.' });
