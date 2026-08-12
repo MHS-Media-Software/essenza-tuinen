@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import ConceptAdminBar from '../components/ConceptAdminBar';
+import BeheerKnop from '../components/BeheerKnop';
 
 // ── Brand tokens (echte gescrapete huisstijl essenzatuinen.nl) ───────────────
 const NAVY   = '#1F2113';
@@ -504,6 +505,7 @@ export function Layout({ children, solidNav = false }) {
       {children}
       <Footer />
       <ConceptAdminBar slug={BRAND.slug} />
+      <BeheerKnop />
       <ContactFAB />
     </div>
   );

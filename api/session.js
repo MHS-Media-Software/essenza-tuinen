@@ -9,6 +9,13 @@ const publiek = (u) => ({ id: u.id, naam: u.naam, email: u.email, telefoon: u.te
 
 export default async function handler(req, res) {
   try {
+    // De beheerknop op de site vraagt alleen "is er iemand ingelogd". Zonder
+    // sessiecookie kost dat geen enkele databasevraag, dus die route gaat vóór
+    // de schemacontrole langs.
+    if (req.method === 'GET' && /[?&]kort=1/.test(req.url || '')) {
+      const wie = await db.currentUser(req);
+      return res.status(200).json({ ok: true, authed: !!wie });
+    }
     await db.ensureSchema();
 
     if (req.method === 'GET') {

@@ -258,15 +258,21 @@ function zetCookie(res, str) {
   lijst.push(str);
   res.setHeader('Set-Cookie', lijst);
 }
+// Leesbaar vlaggetje naast de sessiecookie. Bevat niets geheims en geeft geen
+// toegang; de site gebruikt het alleen om de beheerknop te tonen zonder daarvoor
+// bij elke bezoeker de server te hoeven bevragen.
+const HINT_COOKIE = 'et_beheer';
 // alsVan = id van de beheerder die meekijkt (leeg bij een gewone sessie).
 function setAuthCookie(res, user, alsVan) {
   const payload = { u: user.id, v: Number(user.pass_version || 1), exp: Date.now() + 7 * 864e5 };
   if (alsVan) { payload.a = alsVan; payload.exp = Date.now() + 2 * 3600e3; } // meekijken vervalt na 2 uur
   const tok = signToken(payload);
   zetCookie(res, `${COOKIE}=${tok}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${7 * 86400}`);
+  zetCookie(res, `${HINT_COOKIE}=1; Path=/; Secure; SameSite=Lax; Max-Age=${7 * 86400}`);
 }
 function clearAuthCookie(res) {
   zetCookie(res, `${COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`);
+  zetCookie(res, `${HINT_COOKIE}=; Path=/; Secure; SameSite=Lax; Max-Age=0`);
 }
 
 // ── Passkey-challenge (kort geldig, ondertekend, geen serverstate) ───────────
