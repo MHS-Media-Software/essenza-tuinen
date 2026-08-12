@@ -3,14 +3,13 @@
 import * as db from './_db.js';
 import { sendMail, basisHtml, siteUrl, esc } from './_mail.js';
 
-const emailOk = (e) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(e || ''));
 const INVITE_DAGEN = 7;
 
 function rij(u) {
   let rechten = []; try { rechten = JSON.parse(u.rechten || '[]'); } catch { rechten = []; }
   return {
     id: u.id, naam: u.naam, email: u.email, telefoon: u.telefoon || '', rol: u.rol,
-    rechten: db.cleanPerms(rechten, u.rol), actief: !!u.actief,
+    rechten: db.cleanPerms(rechten, u.rol), actief: !!u.actief, status: u.status || 'actief',
     created: u.created, last_login: u.last_login,
   };
 }
@@ -41,8 +40,10 @@ export default async function handler(req, res) {
       const users = await db.q('SELECT * FROM users ORDER BY actief DESC, naam COLLATE NOCASE');
       const invites = await db.q("SELECT id,token,soort,email,naam,rol,created,exp,gebruikt FROM invites WHERE gebruikt IS NULL AND exp > ? ORDER BY created DESC",
         [new Date().toISOString()]);
+      const rijen = users.map(rij);
       return res.status(200).json({
-        ok: true, users: users.map(rij), perms: db.PERMS, rollen: db.ROLLEN,
+        ok: true, users: rijen, perms: db.PERMS, rollen: db.ROLLEN,
+        wachtend: rijen.filter(u => u.status === 'wacht').length,
         invites: invites.map(i => ({ ...i, link: `${siteUrl(req)}/account-aanmaken?token=${i.token}` })),
       });
     }
@@ -50,34 +51,24 @@ export default async function handler(req, res) {
     if (req.method === 'POST') {
       const b = await db.readBody(req);
 
-      // ── Nieuwe medewerker uitnodigen ─────────────────────────────────────
-      if (b.action === 'uitnodigen') {
-        const email = String(b.email || '').trim().toLowerCase();
-        if (!emailOk(email)) return res.status(400).json({ ok: false, error: 'Vul een geldig e-mailadres in.' });
-        const bestaat = await db.q('SELECT id FROM users WHERE email=?', [email]);
-        if (bestaat.length) return res.status(409).json({ ok: false, error: 'Er is al een account met dit e-mailadres.' });
+      // ── Deelbare aanmeldlink maken ───────────────────────────────────────
+      // Eén link die je aan je team geeft; iedereen die hem opent maakt zelf een
+      // account aan. Dat account is nog niet actief: jij keurt het eerst goed.
+      if (b.action === 'link') {
         const rol = db.ROLLEN[b.rol] ? b.rol : 'medewerker';
         const rechten = db.cleanPerms(b.rechten, rol);
-        const naam = String(b.naam || '').trim();
-        // Openstaande uitnodiging voor hetzelfde adres vervangen.
-        await db.exec("UPDATE invites SET gebruikt=? WHERE email=? AND soort='invite' AND gebruikt IS NULL",
-          [new Date().toISOString(), email]).catch(() => {});
-        const token = await maakUitnodiging({ soort: 'invite', email, naam, rol, rechten, door: ik.naam || ik.email });
-        const link = `${siteUrl(req)}/account-aanmaken?token=${token}`;
-
-        let mail = { sent: false };
-        if (b.mail !== false) mail = await stuurUitnodiging({ email, naam, link, door: ik.naam || ik.email });
-        return res.status(200).json({ ok: true, link, mail });
+        const token = await maakUitnodiging({ soort: 'open', rol, rechten, door: ik.naam || ik.email });
+        return res.status(200).json({
+          ok: true, link: `${siteUrl(req)}/account-aanmaken?token=${token}`, dagen: INVITE_DAGEN,
+        });
       }
 
-      // ── Uitnodiging opnieuw versturen ────────────────────────────────────
-      if (b.action === 'opnieuw') {
+      // ── Bestaande link met een week verlengen ────────────────────────────
+      if (b.action === 'verleng') {
         const inv = (await db.q('SELECT * FROM invites WHERE id=? AND gebruikt IS NULL', [+b.id || 0]))[0];
-        if (!inv) return res.status(404).json({ ok: false, error: 'Uitnodiging niet gevonden.' });
+        if (!inv) return res.status(404).json({ ok: false, error: 'Deze link bestaat niet meer.' });
         await db.exec('UPDATE invites SET exp=? WHERE id=?', [new Date(Date.now() + INVITE_DAGEN * 864e5).toISOString(), inv.id]);
-        const link = `${siteUrl(req)}/account-aanmaken?token=${inv.token}`;
-        const mail = await stuurUitnodiging({ email: inv.email, naam: inv.naam, link, door: ik.naam || ik.email });
-        return res.status(200).json({ ok: true, link, mail });
+        return res.status(200).json({ ok: true, link: `${siteUrl(req)}/account-aanmaken?token=${inv.token}` });
       }
 
       // ── Herstellink voor een bestaand account ────────────────────────────
@@ -113,6 +104,22 @@ export default async function handler(req, res) {
       const u = (await db.q('SELECT * FROM users WHERE id=?', [id]))[0];
       if (!u) return res.status(404).json({ ok: false, error: 'Medewerker niet gevonden.' });
 
+      // ── Nieuw aangemeld account goedkeuren of weigeren ──────────────────
+      if (b.actie === 'goedkeuren' || b.actie === 'afkeuren') {
+        if ((u.status || 'actief') !== 'wacht') {
+          return res.status(409).json({ ok: false, error: 'Dit account wacht niet (meer) op goedkeuring.' });
+        }
+        if (b.actie === 'afkeuren') {
+          // Weigeren verwijdert het account: er hangt nog geen werk aan.
+          await db.exec('DELETE FROM passkeys WHERE user_id=?', [id]).catch(() => {});
+          await db.exec('DELETE FROM users WHERE id=?', [id]);
+          return res.status(200).json({ ok: true, verwijderd: true });
+        }
+        await db.exec("UPDATE users SET status='actief', actief=1 WHERE id=?", [id]);
+        const na = (await db.q('SELECT * FROM users WHERE id=?', [id]))[0];
+        return res.status(200).json({ ok: true, user: rij(na) });
+      }
+
       const velden = [], args = [];
       if (b.naam !== undefined) { velden.push('naam=?'); args.push(String(b.naam).trim()); }
       if (b.telefoon !== undefined) { velden.push('telefoon=?'); args.push(String(b.telefoon).trim()); }
@@ -131,6 +138,7 @@ export default async function handler(req, res) {
           return res.status(400).json({ ok: false, error: id === ik.id ? 'Je kunt je eigen account niet op non-actief zetten.' : 'Er moet minstens één beheerder actief blijven.' });
         }
         velden.push('actief=?'); args.push(actief);
+        velden.push('status=?'); args.push(actief ? 'actief' : 'inactief');
         // Op non-actief zetten verbreekt direct alle lopende sessies.
         if (!actief) velden.push('pass_version=pass_version+1');
       }
@@ -153,22 +161,4 @@ export default async function handler(req, res) {
   } catch (e) {
     return res.status(500).json({ ok: false, error: String(e.message || e).slice(0, 200) });
   }
-}
-
-async function stuurUitnodiging({ email, naam, link, door }) {
-  const tekst = `Beste ${naam || ''},\n\n${door} heeft een account voor je klaargezet in de werkomgeving van Essenza Tuinen. Hierin vul je je uren in en zie je de planning.\n\nMaak je account aan via onderstaande link en kies zelf een wachtwoord:\n\n${link}\n\nDe link is ${INVITE_DAGEN} dagen geldig.`;
-  return sendMail({
-    to: email, subject: 'Je account voor Essenza Tuinen', text: tekst,
-    html: basisHtml({
-      titel: 'Welkom bij de werkomgeving',
-      tekstRegels: [
-        `Beste ${esc(naam || '')},`,
-        `${esc(door)} heeft een account voor je klaargezet. Hierin vul je je gewerkte uren in en zie je de planning.`,
-        'Klik op de knop hieronder, kies zelf een wachtwoord en je kunt meteen aan de slag.',
-      ],
-      knopTekst: 'Account aanmaken', knopLink: link,
-      voet: `Deze link is ${INVITE_DAGEN} dagen geldig en werkt één keer.`,
-    }),
-    refType: 'invite', refId: 0,
-  });
 }

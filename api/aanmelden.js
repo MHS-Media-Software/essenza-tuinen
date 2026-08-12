@@ -4,6 +4,7 @@
 import * as db from './_db.js';
 
 const ONGELDIG = 'Deze link is verlopen of al gebruikt. Vraag je beheerder om een nieuwe.';
+const emailOk = (e) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(e || ''));
 
 async function geldigeInvite(token) {
   if (!token) return null;
@@ -20,7 +21,12 @@ export default async function handler(req, res) {
     if (req.method === 'GET') {
       const inv = await geldigeInvite(req.query && req.query.token);
       if (!inv) return res.status(404).json({ ok: false, error: ONGELDIG });
-      return res.status(200).json({ ok: true, email: inv.email, naam: inv.naam || '', soort: inv.soort || 'invite' });
+      // Bij een deelbare link vult de medewerker zelf zijn naam en e-mailadres in.
+      return res.status(200).json({
+        ok: true, soort: inv.soort || 'invite',
+        email: inv.soort === 'open' ? '' : inv.email,
+        naam: inv.soort === 'open' ? '' : (inv.naam || ''),
+      });
     }
 
     if (req.method === 'POST') {
@@ -43,22 +49,31 @@ export default async function handler(req, res) {
         return res.status(200).json({ ok: true });
       }
 
-      // Nieuw account vanuit een uitnodiging.
-      const email = String(inv.email || '').trim().toLowerCase();
+      // Nieuw account. Bij een deelbare link geeft de medewerker zelf zijn
+      // e-mailadres op; bij een persoonlijke uitnodiging ligt dat al vast.
+      const open = inv.soort === 'open';
+      const email = String(open ? b.email : inv.email || '').trim().toLowerCase();
+      if (!emailOk(email)) return res.status(400).json({ ok: false, error: 'Vul een geldig e-mailadres in.' });
+      const naam = String(b.naam || inv.naam || '').trim();
+      if (!naam) return res.status(400).json({ ok: false, error: 'Vul je naam in.' });
       if ((await db.q('SELECT id FROM users WHERE email=?', [email])).length) {
-        await db.exec('UPDATE invites SET gebruikt=? WHERE id=?', [now, inv.id]);
+        if (!open) await db.exec('UPDATE invites SET gebruikt=? WHERE id=?', [now, inv.id]);
         return res.status(409).json({ ok: false, error: 'Er bestaat al een account met dit e-mailadres. Log gewoon in.' });
       }
       const rol = db.ROLLEN[inv.rol] ? inv.rol : 'medewerker';
       let rechten = []; try { rechten = JSON.parse(inv.rechten || '[]'); } catch { rechten = []; }
-      const naam = String(b.naam || inv.naam || '').trim();
-      if (!naam) return res.status(400).json({ ok: false, error: 'Vul je naam in.' });
 
-      await db.exec(`INSERT INTO users(email,pass_hash,naam,telefoon,rol,rechten,actief,pass_version,created,last_login)
-        VALUES(?,?,?,?,?,?,1,1,?,?)`,
-        [email, db.hashPw(pw), naam, String(b.telefoon || '').trim(), rol, JSON.stringify(db.cleanPerms(rechten, rol)), now, now]);
-      await db.exec('UPDATE invites SET gebruikt=? WHERE id=?', [now, inv.id]);
+      // Een account via een deelbare link staat nog uit tot de beheerder het
+      // goedkeurt — zo levert een uitgelekte link niemand toegang op.
+      const status = open ? 'wacht' : 'actief';
+      await db.exec(`INSERT INTO users(email,pass_hash,naam,telefoon,rol,rechten,actief,status,pass_version,created,last_login)
+        VALUES(?,?,?,?,?,?,?,?,1,?,?)`,
+        [email, db.hashPw(pw), naam, String(b.telefoon || '').trim(), rol,
+          JSON.stringify(db.cleanPerms(rechten, rol)), open ? 0 : 1, status, now, open ? null : now]);
+      // Een deelbare link blijft geldig tot hij verloopt; een persoonlijke niet.
+      if (!open) await db.exec('UPDATE invites SET gebruikt=? WHERE id=?', [now, inv.id]);
       const u = (await db.q('SELECT * FROM users WHERE email=?', [email]))[0];
+      if (open) return res.status(200).json({ ok: true, wacht: true });
       db.setAuthCookie(res, u);
       return res.status(200).json({ ok: true });
     }

@@ -116,6 +116,8 @@ function ensureSchema() {
   ])
     // Migraties (idempotent): kolommen die later zijn toegevoegd aan bestaande tabellen.
     .then(() => run([{ sql: 'ALTER TABLE products ADD COLUMN btw REAL DEFAULT 21' }]).catch(() => {}))
+    // 'wacht' = via een deelbare link aangemaakt, moet nog goedgekeurd worden.
+    .then(() => run([{ sql: "ALTER TABLE users ADD COLUMN status TEXT DEFAULT 'actief'" }]).catch(() => {}))
     .catch(e => { _schemaReady = null; throw e; });
   return _schemaReady;
 }

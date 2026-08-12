@@ -89,9 +89,16 @@ export default async function handler(req, res) {
       const u = (await db.q('SELECT * FROM users WHERE email=?', [email]))[0];
       // Bewust één en dezelfde melding, zodat niet te achterhalen is welke
       // e-mailadressen een account hebben.
-      if (!u || !u.actief || !db.verifyPw(pw, u.pass_hash)) {
+      if (!u || !db.verifyPw(pw, u.pass_hash)) {
         await db.noteAttempt(req, email);
         return res.status(401).json({ ok: false, error: 'Onjuist e-mailadres of wachtwoord.' });
+      }
+      // Wachtwoord klopt: dan mag je ook horen waaróm je er nog niet in kunt.
+      if ((u.status || 'actief') === 'wacht') {
+        return res.status(403).json({ ok: false, error: 'Je account is aangemaakt, maar moet nog door je beheerder worden goedgekeurd.' });
+      }
+      if (!u.actief) {
+        return res.status(403).json({ ok: false, error: 'Dit account is niet meer actief. Neem contact op met je beheerder.' });
       }
       await db.clearAttempts(req, email);
       await db.exec('UPDATE users SET last_login=? WHERE id=?', [new Date().toISOString(), u.id]);
