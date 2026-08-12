@@ -677,6 +677,10 @@
             <h2 class="font-h font-bold">Support</h2>
           </div>
           <p class="text-xs mb-3" style="color:#6B7060">Alleen jij ziet dit blok. De klant merkt er niets van in zijn eigen dashboard.</p>
+          <div class="flex flex-wrap items-center gap-2 mb-3 pb-3 border-b" style="border-color:#E6E8DC">
+            <button class="btn btn-sec !py-1.5 !text-xs" :disabled="teamBusy" @click="testmail()">Testmail naar mezelf</button>
+            <span class="text-xs" style="color:#6B7060">Controleert de mailkoppeling en toont de melding van de mailserver.</span>
+          </div>
           <template x-if="!klantBeheerders.length">
             <p class="text-sm" style="color:#6B7060">Er is nog geen beheerdersaccount van de klant zelf.</p>
           </template>
@@ -1545,6 +1549,14 @@ function admin(){return{
     this.medewerker=null; this.ok('Rechten bijgewerkt'); this.loadTeam();
     if(d.user&&d.user.id===this.ik.id) this.ik.rechten=d.user.rechten; },
   // Support-knop: stuurt de klant een herstelmail (of geeft de link terug).
+  // Testmail naar je eigen adres, om de mailkoppeling na te rekenen.
+  async testmail(){ this.teamBusy=true;
+    const d=await this.api('/api/team',{method:'POST',body:JSON.stringify({action:'testmail'})});
+    this.teamBusy=false;
+    if(!d.ok) return this.mis(d.error||'Testmail mislukt');
+    if(d.mail&&d.mail.sent) return this.ok('Testmail verstuurd naar '+d.aan+' via '+d.mail.provider+' ('+d.ms+' ms)');
+    this.mis(d.mail&&d.mail.error ? d.mail.error : 'Er is geen mailserver gekoppeld, dus er is niets verstuurd.'); },
+
   // Bewust géén mail: die kwam niet altijd aan. Je krijgt de link zelf te zien
   // en stuurt hem via het kanaal waarvan je weet dat het werkt.
   async herstelLink(u){ this.teamBusy=true;

@@ -1,7 +1,7 @@
 // Medewerkersbeheer: uitnodigen, rechten aan/uit zetten, deactiveren.
 // Vereist het recht 'team'.
 import * as db from './_db.js';
-import { sendMail, basisHtml, siteUrl, esc } from './_mail.js';
+import { sendMail, basisHtml, mailProvider, siteUrl, esc } from './_mail.js';
 
 const INVITE_DAGEN = 7;
 
@@ -75,6 +75,29 @@ export default async function handler(req, res) {
         if (!inv) return res.status(404).json({ ok: false, error: 'Deze link bestaat niet meer.' });
         await db.exec('UPDATE invites SET exp=? WHERE id=?', [new Date(Date.now() + INVITE_DAGEN * 864e5).toISOString(), inv.id]);
         return res.status(200).json({ ok: true, link: `${siteUrl(req)}/account-aanmaken?token=${inv.token}` });
+      }
+
+      // ── Testmail naar jezelf (alleen het MHS-team) ───────────────────────
+      // Voor het narekenen van de mailkoppeling: stuurt naar je eigen adres en
+      // geeft de uitkomst terug, inclusief de foutmelding van de mailserver.
+      if (b.action === 'testmail') {
+        if ((ik.via || 'lokaal') !== 'sso') {
+          return res.status(403).json({ ok: false, error: 'Alleen het MHS-team kan een testmail versturen.' });
+        }
+        const start = Date.now();
+        const mail = await sendMail({
+          to: ik.email,
+          subject: 'Testmail · Essenza Tuinen',
+          text: 'Deze testmail komt uit het beheer van Essenza Tuinen. Als je hem ontvangt, worden offertes, facturen en herstellinks ook bezorgd.',
+          html: basisHtml({
+            titel: 'De mailkoppeling werkt',
+            tekstRegels: ['Deze testmail komt uit het beheer van Essenza Tuinen.',
+              'Als je hem ontvangt, worden offertes, facturen en herstellinks ook bezorgd.'],
+            voet: 'Verstuurd op ' + new Date().toLocaleString('nl-NL'),
+          }),
+          refType: 'test', refId: ik.id,
+        });
+        return res.status(200).json({ ok: true, mail, ms: Date.now() - start, provider: mailProvider(), aan: ik.email });
       }
 
       // ── Herstellink voor een bestaand account ────────────────────────────

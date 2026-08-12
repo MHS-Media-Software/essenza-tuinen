@@ -41,12 +41,15 @@ async function sendMail({ to, subject, html, text, refType, refId }) {
 
   if (process.env.SMTP_HOST) {
     const port = +(process.env.SMTP_PORT || 465);
-    const transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST, port, secure: port === 465,
-      auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
-      connectionTimeout: 15000, greetingTimeout: 15000,
-    });
     try {
+      const transporter = nodemailer.createTransport({
+        host: process.env.SMTP_HOST, port, secure: port === 465,
+        auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+        // Bewust ruim binnen de looptijd van de functie: een trage of
+        // geblokkeerde mailserver moet híer stuklopen (en gelogd worden), niet
+        // de hele aanroep laten aflopen — dan blijft er geen spoor over.
+        connectionTimeout: 8000, greetingTimeout: 8000, socketTimeout: 12000,
+      });
       await transporter.sendMail({ from, to, subject, html, text });
       await log('verzonden', 'smtp');
       return { sent: true, provider: 'smtp' };
