@@ -687,7 +687,7 @@
                   <span class="font-semibold block truncate" x-text="u.naam||u.email"></span>
                   <span class="text-xs block truncate" style="color:#6B7060" x-text="u.email"></span>
                 </span>
-                <button class="btn btn-sec !py-1.5 !text-xs" @click="herstelmailSturen(u)">Wachtwoordreset versturen</button>
+                <button class="btn btn-sec !py-1.5 !text-xs" :disabled="teamBusy" @click="herstelLink(u)">Herstellink maken</button>
               </div>
             </template>
           </div>
@@ -1121,7 +1121,7 @@
                 <span class="text-sm">Account is actief <span style="color:#6B7060">— uitzetten sluit deze medewerker direct buiten</span></span>
               </label>
               <div class="flex flex-wrap gap-2 mt-2">
-                <button class="btn btn-sec" @click="herstelLink(medewerker)">Wachtwoord-herstellink sturen</button>
+                <button class="btn btn-sec" :disabled="teamBusy" @click="herstelLink(medewerker)">Herstellink maken</button>
                 <button class="btn btn-danger" x-show="medewerker.id!==ik.id" @click="verwijderMedewerker(medewerker)">Medewerker verwijderen</button>
               </div>
             </div>
@@ -1545,17 +1545,15 @@ function admin(){return{
     this.medewerker=null; this.ok('Rechten bijgewerkt'); this.loadTeam();
     if(d.user&&d.user.id===this.ik.id) this.ik.rechten=d.user.rechten; },
   // Support-knop: stuurt de klant een herstelmail (of geeft de link terug).
-  herstelmailSturen(u){ this.vraagBevestiging({
-    titel:'Wachtwoordreset versturen?',
-    tekst:'Er gaat een herstelmail naar '+u.email+'. De link daarin is 7 dagen geldig en werkt één keer.',
-    ja:'Versturen',
-    actie:()=>this.herstelLink(u) }); },
-
-  async herstelLink(u){ const d=await this.api('/api/team',{method:'POST',body:JSON.stringify({action:'reset',id:u.id})});
+  // Bewust géén mail: die kwam niet altijd aan. Je krijgt de link zelf te zien
+  // en stuurt hem via het kanaal waarvan je weet dat het werkt.
+  async herstelLink(u){ this.teamBusy=true;
+    const d=await this.api('/api/team',{method:'POST',body:JSON.stringify({action:'reset',id:u.id,mail:false})});
+    this.teamBusy=false;
     if(!d.ok) return this.mis(d.error||'Mislukt');
     this.medewerker=null; this.loadTeam();
-    if(d.mail&&d.mail.sent) this.ok('Herstellink gemaild naar '+u.email);
-    else this.linkModal={ titel:'Herstellink', link:d.link, tekst:'Stuur deze link naar '+(u.naam||u.email)+'. De link is 7 dagen geldig.' }; },
+    this.linkModal={ titel:'Herstellink voor '+(u.naam||u.email), link:d.link,
+      tekst:'Met deze link stelt '+(u.naam||u.email)+' zelf een nieuw wachtwoord in. Hij is 7 dagen geldig en werkt één keer, dus deel hem alleen met die persoon.' }; },
   trekIn(i){ this.vraagBevestiging({ titel:'Link intrekken?', tekst:'Met deze link kan daarna niemand meer een account aanmaken.', ja:'Intrekken', gevaar:true,
     actie:async()=>{ const d=await this.api('/api/team',{method:'DELETE',body:JSON.stringify({invite_id:i.id})});
       if(!d.ok) return this.mis(d.error||'Mislukt'); this.ok('Ingetrokken'); this.loadTeam(); } }); },
