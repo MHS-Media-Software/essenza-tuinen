@@ -27,6 +27,7 @@
     .btn-primary{background:#0B9D46;color:#fff;padding:.6rem 1.1rem}.btn-primary:hover{background:#087A37}
     .btn:disabled{opacity:.45;cursor:default}.btn-primary:disabled:hover{background:#0B9D46}
     .btn-sec{background:#fff;border:1px solid #E6E8DC;color:#1F2113;padding:.55rem 1rem}.btn-sec:hover{background:#F5F7EE}
+    .btn-sec:disabled:hover{background:#fff}
     .btn-danger{background:#fff;border:1px solid #f0c4c4;color:#C0392B;padding:.5rem .8rem}
     .inp{width:100%;padding:.6rem .8rem;border:1px solid #E6E8DC;border-radius:.6rem;font-size:.9rem;outline:none;background:#fff}
     .inp:focus{border-color:#0B9D46}
@@ -406,7 +407,7 @@
           <h1 class="font-h text-2xl font-bold flex-1">Mijn uren</h1>
           <div class="flex items-center gap-1">
             <button class="btn btn-sec !px-3" @click="weekVerzet(-1)" title="Vorige week">‹</button>
-            <button class="btn btn-sec !px-3" @click="weekNu()">Deze week</button>
+            <button class="btn btn-sec !px-3" :disabled="isDezeWeek" @click="weekNu()">Deze week</button>
             <button class="btn btn-sec !px-3" @click="weekVerzet(1)" title="Volgende week">›</button>
           </div>
         </div>
@@ -482,7 +483,7 @@
           <h1 class="font-h text-2xl font-bold flex-1">Urenoverzicht</h1>
           <div class="flex items-center gap-1">
             <button class="btn btn-sec !px-3" @click="weekVerzet(-1)">‹</button>
-            <button class="btn btn-sec !px-3" @click="weekNu()">Deze week</button>
+            <button class="btn btn-sec !px-3" :disabled="isDezeWeek" @click="weekNu()">Deze week</button>
             <button class="btn btn-sec !px-3" @click="weekVerzet(1)">›</button>
           </div>
           <button class="btn btn-sec" @click="exporteerUren()">Exporteer CSV</button>
@@ -538,7 +539,7 @@
           <h1 class="font-h text-2xl font-bold flex-1">Planning</h1>
           <div class="flex items-center gap-1">
             <button class="btn btn-sec !px-3" @click="weekVerzet(-1)">‹</button>
-            <button class="btn btn-sec !px-3" @click="weekNu()">Deze week</button>
+            <button class="btn btn-sec !px-3" :disabled="isDezeWeek" @click="weekNu()">Deze week</button>
             <button class="btn btn-sec !px-3" @click="weekVerzet(1)">›</button>
           </div>
           <button class="btn btn-primary" x-show="magPlannen && !bekijkAls" @click="nieuweKlus(vandaagIso)">+ Klus inplannen</button>
@@ -1362,6 +1363,7 @@ function admin(){return{
     return a.toLocaleDateString('nl-NL',{day:'numeric',month:'long'})+' t/m '+b.toLocaleDateString('nl-NL',{day:'numeric',month:'long',year:'numeric'}); },
   weekVerzet(n){ this.weekVan=this.dagPlus(this.weekVan,7*n); this.laadWeek(); },
   weekNu(){ this.weekVan=this.maandagVan(this.vandaagIso); this.laadWeek(); },
+  get isDezeWeek(){ return this.weekVan===this.maandagVan(this.vandaagIso) },
   laadWeek(){ if(this.view==='uren')this.loadUren(false); else if(this.view==='urenteam')this.loadUren(true);
     else if(this.view==='planning')this.loadPlanning(); },
   dagKort(iso){ return new Date(iso+'T00:00:00').toLocaleDateString('nl-NL',{weekday:'short',day:'numeric',month:'short'}) },
