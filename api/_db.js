@@ -253,10 +253,11 @@ async function requireUser(req, res) { return requirePerm(req, res, null); }
 // Cookies stapelen i.p.v. overschrijven: bij passkey-login worden de sessie- en
 // de challenge-cookie in hetzelfde antwoord gezet.
 function zetCookie(res, str) {
-  const bestaand = res.getHeader ? res.getHeader('Set-Cookie') : null;
-  const lijst = bestaand ? (Array.isArray(bestaand) ? bestaand.slice() : [bestaand]) : [];
+  // De lijst wordt zelf bijgehouden: terugvragen via res.getHeader() werkt niet
+  // overal, en dan overschreef de tweede cookie stilletjes de eerste.
+  const lijst = res._etCookies || (res._etCookies = []);
   lijst.push(str);
-  res.setHeader('Set-Cookie', lijst);
+  res.setHeader('Set-Cookie', lijst.slice());
 }
 // Leesbaar vlaggetje naast de sessiecookie. Bevat niets geheims en geeft geen
 // toegang; de site gebruikt het alleen om de beheerknop te tonen zonder daarvoor
