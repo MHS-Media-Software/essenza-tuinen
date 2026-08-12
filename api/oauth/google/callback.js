@@ -45,13 +45,12 @@ export default async function handler(req, res) {
         [email, naam, 'beheerder', JSON.stringify(db.PERM_KEYS), now, now]);
       u = (await db.q('SELECT * FROM users WHERE email=?', [email]))[0];
     } else {
-      if (!u.actief || (u.status || 'actief') !== 'actief') {
-        // Een MHS-account dat op non-actief stond weer aanzetten mag: het is ons
-        // eigen supportaccount, geen medewerker van de klant.
-        if (u.via === 'sso') await db.exec("UPDATE users SET actief=1, status='actief' WHERE id=?", [u.id]);
-        else return terug(res, 'denied');
-      }
-      await db.exec('UPDATE users SET last_login=? WHERE id=?', [now, u.id]);
+      // Bestond er al een account op dit adres — bijvoorbeeld handmatig als
+      // medewerker aangemaakt — dan wint de SSO-controle. Alleen wie dit
+      // @mhsmedia.nl-account bij Google beheert komt hier, dus dat is ons eigen
+      // account: we tillen het op naar beheerder en zetten het weer aan.
+      await db.exec(`UPDATE users SET via='sso', rol='beheerder', rechten=?, actief=1, status='actief', last_login=? WHERE id=?`,
+        [JSON.stringify(db.PERM_KEYS), now, u.id]);
       u = (await db.q('SELECT * FROM users WHERE id=?', [u.id]))[0];
     }
 
