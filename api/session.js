@@ -12,7 +12,8 @@ export default async function handler(req, res) {
     // De beheerknop op de site vraagt alleen "is er iemand ingelogd". Zonder
     // sessiecookie kost dat geen enkele databasevraag, dus die route gaat vóór
     // de schemacontrole langs.
-    if (req.method === 'GET' && /[?&]kort=1/.test(req.url || '')) {
+    const kort = (req.query && req.query.kort) || /[?&]kort=1/.test(req.url || '');
+    if (req.method === 'GET' && kort) {
       const wie = await db.currentUser(req);
       return res.status(200).json({ ok: true, authed: !!wie });
     }
