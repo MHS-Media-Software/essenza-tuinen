@@ -627,6 +627,29 @@
           </template>
         </div>
 
+        <!-- Alleen zichtbaar voor MHS-teamleden: support-acties -->
+        <div class="card p-5 mb-4" x-show="benTeam" style="border-color:#c7d6ee;background:#F7FAFF">
+          <div class="flex items-center gap-2 mb-1">
+            <span class="pill zin" style="background:#E8EEF8;color:#2c5aa0">MHS-team</span>
+            <h2 class="font-h font-bold">Support</h2>
+          </div>
+          <p class="text-xs mb-3" style="color:#6B7060">Alleen jij ziet dit blok. De klant merkt er niets van in zijn eigen dashboard.</p>
+          <template x-if="!klantBeheerders.length">
+            <p class="text-sm" style="color:#6B7060">Er is nog geen beheerdersaccount van de klant zelf.</p>
+          </template>
+          <div class="divide-y" style="border-color:#E6E8DC">
+            <template x-for="u in klantBeheerders" :key="'kb'+u.id">
+              <div class="flex flex-wrap items-center gap-3 py-2.5 text-sm">
+                <span class="flex-1 min-w-0">
+                  <span class="font-semibold block truncate" x-text="u.naam||u.email"></span>
+                  <span class="text-xs block truncate" style="color:#6B7060" x-text="u.email"></span>
+                </span>
+                <button class="btn btn-sec !py-1.5 !text-xs" @click="herstelmailSturen(u)">Wachtwoordreset versturen</button>
+              </div>
+            </template>
+          </div>
+        </div>
+
         <!-- Actieve aanmeldlinks -->
         <div class="card p-5" x-show="teamInvites.length">
           <h2 class="font-h font-bold mb-1">Actieve aanmeldlinks</h2>
@@ -1416,6 +1439,9 @@ function admin(){return{
     this.teamUsers=d.users||[]; this.teamInvites=d.invites||[]; this.wachtendAantal=d.wachtend||0;
     if(d.perms)this.perms=d.perms; if(d.rollen)this.rollen=d.rollen; },
   get wachtenden(){ return this.teamUsers.filter(u=>u.status==='wacht') },
+  // MHS-teamlid: binnengekomen via Google-SSO, geen medewerker van de klant.
+  get benTeam(){ return this.ik.via==='sso' },
+  get klantBeheerders(){ return this.teamUsers.filter(u=>u.via!=='sso' && u.actief && u.status!=='wacht' && (u.rechten||[]).includes('team')) },
   get teamBeoordeeld(){ return this.teamUsers.filter(u=>u.status!=='wacht') },
 
   nieuweUitnodiging(){ this.medewerker={nieuw:true,rol:'medewerker',rechten:(this.rollen.medewerker||[]).slice()} },
@@ -1459,6 +1485,13 @@ function admin(){return{
     if(!d.ok) return this.mis(d.error||'Opslaan mislukt');
     this.medewerker=null; this.ok('Rechten bijgewerkt'); this.loadTeam();
     if(d.user&&d.user.id===this.ik.id) this.ik.rechten=d.user.rechten; },
+  // Support-knop: stuurt de klant een herstelmail (of geeft de link terug).
+  herstelmailSturen(u){ this.vraagBevestiging({
+    titel:'Wachtwoordreset versturen?',
+    tekst:'Er gaat een herstelmail naar '+u.email+'. De link daarin is 7 dagen geldig en werkt één keer.',
+    ja:'Versturen',
+    actie:()=>this.herstelLink(u) }); },
+
   async herstelLink(u){ const d=await this.api('/api/team',{method:'POST',body:JSON.stringify({action:'reset',id:u.id})});
     if(!d.ok) return this.mis(d.error||'Mislukt');
     this.medewerker=null; this.loadTeam();

@@ -5,7 +5,7 @@
 import * as db from './_db.js';
 
 const emailOk = (e) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(e || ''));
-const publiek = (u) => ({ id: u.id, naam: u.naam, email: u.email, telefoon: u.telefoon || '', rol: u.rol, rechten: u.rechten });
+const publiek = (u) => ({ id: u.id, naam: u.naam, email: u.email, telefoon: u.telefoon || '', rol: u.rol, rechten: u.rechten, via: u.via || 'lokaal' });
 
 export default async function handler(req, res) {
   try {
