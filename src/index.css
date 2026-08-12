@@ -5,5 +5,11 @@
 /* Voorkom horizontale overflow/jitter door inschuif-animaties bij het laden. */
 html, body { overflow-x: hidden; max-width: 100%; }
 
+/* Doorschieten aan het begin en eind van de pagina liet de witte achtergrond
+   áchter de site zien. Bovenaan (hero) en onderaan (footer) is de site donker
+   olijf, dus die kleur meegeven; waar het kan schakelen we het meeveren uit. */
+html { background: #1F2113; overscroll-behavior-y: none; }
+body { overscroll-behavior-y: none; }
+
 /* Verberg de scrollbalk van de horizontale carousels (reviews/projecten). */
 .mp-carousel::-webkit-scrollbar { display: none; }
