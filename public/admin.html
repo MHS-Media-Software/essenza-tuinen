@@ -46,6 +46,12 @@
     /* Lijn-iconen in de navigatie: nemen de kleur van het menu-item over */
     .ico{width:18px;height:18px;flex-shrink:0;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;opacity:.8}
     .navi.active .ico{opacity:1}
+    /* Meekijken als medewerker: duidelijke balk bovenaan, layout schuift mee */
+    .meekijkbalk{position:fixed;top:0;left:0;right:0;height:2.5rem;z-index:40;display:flex;align-items:center;gap:.75rem;
+      padding:0 .9rem;background:#8a6d0b;color:#fff;font-size:.82rem;font-weight:600}
+    body.meekijken{padding-top:2.5rem}
+    body.meekijken .zij{top:2.5rem;height:calc(100vh - 2.5rem)}
+    body.meekijken .mobbar{top:2.5rem}
     .btn-zij{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);color:rgba(255,255,255,.85);padding:.55rem 1rem}
     .btn-zij:hover{background:rgba(255,255,255,.14);color:#fff}
     /* Toasts en bevestigingen — geen native dialogvensters in het beheer */
@@ -64,7 +70,16 @@
     .urenrij{display:grid;grid-template-columns:6.5rem 1fr auto;gap:.5rem;align-items:center}
   </style>
 </head>
-<body x-data="admin()" x-init="init()" x-cloak>
+<body x-data="admin()" x-init="init()" x-cloak :class="bekijkAls?'meekijken':''">
+
+  <!-- Meekijken als medewerker -->
+  <div x-show="bekijkAls" x-cloak class="meekijkbalk">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="shrink-0">
+      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/>
+    </svg>
+    <span class="truncate">Je bekijkt het dashboard als <b x-text="ik.naam||ik.email"></b> — alleen lezen.</span>
+    <button class="ml-auto shrink-0 px-3 py-1 rounded-lg font-bold" style="background:rgba(255,255,255,.2)" @click="stopBekijken()">Terug naar mijn account</button>
+  </div>
 
   <!-- Nog niet ingelogd: doorsturen naar de inlogpagina -->
   <div x-show="!authed" class="min-h-screen flex items-center justify-center p-4" style="background:linear-gradient(135deg,#1F2113,#2C3019)">
@@ -138,7 +153,7 @@
     </aside>
 
     <!-- Mobile topbar -->
-    <div class="zij md:hidden fixed top-0 inset-x-0 border-b z-20 flex items-center gap-2 px-3 py-2">
+    <div class="zij mobbar md:hidden fixed top-0 inset-x-0 border-b z-20 flex items-center gap-2 px-3 py-2">
       <img src="/favicon.png" class="w-8 h-8 rounded-lg">
       <select class="inp !py-1.5 flex-1" x-model="view" @change="ga(view)">
         <template x-if="mag('leads')"><option value="dashboard">Dashboard</option></template>
@@ -394,14 +409,14 @@
             <p x-show="weekNote" class="text-xs mt-1" style="color:#C0392B" x-text="weekNote"></p>
           </div>
           <div class="flex gap-2">
-            <button class="btn btn-primary" x-show="weekStatus==='concept'||weekStatus==='afgekeurd'" :disabled="!mijnUren.length" @click="weekIndienen()">Week indienen</button>
+            <button class="btn btn-primary" x-show="(weekStatus==='concept'||weekStatus==='afgekeurd') && !bekijkAls" :disabled="!mijnUren.length" @click="weekIndienen()">Week indienen</button>
             <span x-show="weekStatus==='ingediend'" class="text-sm" style="color:#6B7060">Ingediend — wacht op goedkeuring.</span>
             <span x-show="weekStatus==='akkoord'" class="text-sm font-semibold" style="color:#087A37">Goedgekeurd</span>
           </div>
         </div>
 
         <!-- Ingeplande klussen als snelinvoer -->
-        <div class="card p-4 mb-4" x-show="klussen.length">
+        <div class="card p-4 mb-4" x-show="klussen.length && !bekijkAls">
           <p class="lbl mb-2">Vanuit je planning</p>
           <div class="flex flex-wrap gap-2">
             <template x-for="k in klussen" :key="k.id">
@@ -421,7 +436,7 @@
               <div class="flex items-center gap-3 mb-2">
                 <p class="font-h font-bold text-sm flex-1" x-text="d.label"></p>
                 <p class="text-sm font-bold" x-show="dagTotaal(d.iso)" x-text="urenTekst(dagTotaal(d.iso))"></p>
-                <button class="btn btn-sec !py-1 !px-2.5 !text-xs" x-show="weekOpen" @click="nieuwUur(d.iso)">+ Uren</button>
+                <button class="btn btn-sec !py-1 !px-2.5 !text-xs" x-show="weekOpen && !bekijkAls" @click="nieuwUur(d.iso)">+ Uren</button>
               </div>
               <template x-if="!urenVanDag(d.iso).length">
                 <p class="text-xs" style="color:#9aa08d">Nog niets ingevuld.</p>
@@ -436,8 +451,8 @@
                       <span x-show="(r.lead_naam||r.project)&&r.omschrijving" class="block text-xs truncate" style="color:#6B7060" x-text="r.omschrijving"></span>
                     </span>
                     <span x-show="r.soort&&r.soort!=='werk'" class="pill" style="background:#F5F7EE;color:#6B7060" x-text="r.soort"></span>
-                    <button class="text-xs font-bold" style="color:#0B9D46" x-show="!r.vergrendeld" @click="bewerkUur(r)">Wijzig</button>
-                    <button class="text-xs font-bold" style="color:#C0392B" x-show="!r.vergrendeld" @click="verwijderUur(r)">×</button>
+                    <button class="text-xs font-bold" style="color:#0B9D46" x-show="!r.vergrendeld && !bekijkAls" @click="bewerkUur(r)">Wijzig</button>
+                    <button class="text-xs font-bold" style="color:#C0392B" x-show="!r.vergrendeld && !bekijkAls" @click="verwijderUur(r)">×</button>
                   </div>
                 </template>
               </div>
@@ -511,7 +526,7 @@
             <button class="btn btn-sec !px-3" @click="weekNu()">Deze week</button>
             <button class="btn btn-sec !px-3" @click="weekVerzet(1)">›</button>
           </div>
-          <button class="btn btn-primary" x-show="magPlannen" @click="nieuweKlus(vandaagIso)">+ Klus inplannen</button>
+          <button class="btn btn-primary" x-show="magPlannen && !bekijkAls" @click="nieuweKlus(vandaagIso)">+ Klus inplannen</button>
         </div>
         <p class="text-sm mb-4" style="color:#6B7060" x-text="weekLabel"></p>
 
@@ -602,9 +617,11 @@
                 </p>
                 <p class="text-xs truncate" style="color:#6B7060" x-text="u.email"></p>
               </div>
+              <span x-show="u.via==='sso'" class="pill zin" style="background:#E8EEF8;color:#2c5aa0">MHS-team</span>
               <span class="pill capitalize" style="background:#F5F7EE;color:#4b5043" x-text="u.rol"></span>
               <span class="pill zin" :style="u.actief?'background:#E4F2E8;color:#087A37':'background:#EDEFE6;color:#6B7060'" x-text="u.actief?'Actief':'Non-actief'"></span>
               <span class="text-xs hidden sm:block w-28" style="color:#9aa08d" x-text="u.last_login?('laatst: '+fmt(u.last_login)):'nog niet ingelogd'"></span>
+              <button class="btn btn-sec !py-1.5" x-show="u.actief && u.id!==ik.id" @click="bekijkAlsMedewerker(u)">Bekijk als</button>
               <button class="btn btn-sec !py-1.5" @click="openMedewerker(u)">Rechten</button>
             </div>
           </template>
@@ -676,8 +693,36 @@
         <div class="card p-5 mb-4">
           <h2 class="font-h font-bold mb-3">Wachtwoord wijzigen</h2>
           <div class="grid sm:grid-cols-2 gap-3">
-            <div><label class="lbl">Huidig wachtwoord</label><input type="password" class="inp mt-1" x-model="pwOud" autocomplete="current-password"></div>
-            <div><label class="lbl">Nieuw wachtwoord</label><input type="password" class="inp mt-1" x-model="pwNieuw" autocomplete="new-password"></div>
+            <div><label class="lbl">Huidig wachtwoord</label>
+              <div class="relative mt-1">
+                <input :type="toonPw.oud?'text':'password'" class="inp !pr-11" x-model="pwOud" autocomplete="current-password">
+                <button type="button" @click="toonPw.oud=!toonPw.oud" :aria-label="toonPw.oud?'Verberg wachtwoord':'Toon wachtwoord'" tabindex="-1"
+                    class="absolute right-3 top-1/2 -translate-y-1/2 " style="color:#6B7060">
+              <svg x-show="!toonPw.oud" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/>
+              </svg>
+              <svg x-show="toonPw.oud" x-cloak width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M10.6 5.1A10.9 10.9 0 0 1 12 5c6.5 0 10 7 10 7a18.3 18.3 0 0 1-2.6 3.6M6.6 6.6A18 18 0 0 0 2 12s3.5 7 10 7c1.6 0 3.1-.4 4.4-1"/>
+                <path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/><path d="m2 2 20 20"/>
+              </svg>
+            </button>
+              </div>
+            </div>
+            <div><label class="lbl">Nieuw wachtwoord</label>
+              <div class="relative mt-1">
+                <input :type="toonPw.nieuw?'text':'password'" class="inp !pr-11" x-model="pwNieuw" autocomplete="new-password">
+                <button type="button" @click="toonPw.nieuw=!toonPw.nieuw" :aria-label="toonPw.nieuw?'Verberg wachtwoord':'Toon wachtwoord'" tabindex="-1"
+                    class="absolute right-3 top-1/2 -translate-y-1/2 " style="color:#6B7060">
+              <svg x-show="!toonPw.nieuw" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/>
+              </svg>
+              <svg x-show="toonPw.nieuw" x-cloak width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M10.6 5.1A10.9 10.9 0 0 1 12 5c6.5 0 10 7 10 7a18.3 18.3 0 0 1-2.6 3.6M6.6 6.6A18 18 0 0 0 2 12s3.5 7 10 7c1.6 0 3.1-.4 4.4-1"/>
+                <path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/><path d="m2 2 20 20"/>
+              </svg>
+            </button>
+              </div>
+            </div>
           </div>
           <p class="text-xs mt-2" style="color:#6B7060">Minimaal 10 tekens. Je wordt op je andere apparaten uitgelogd.</p>
           <button class="btn btn-primary mt-4" :disabled="!kanWachtwoord" @click="wachtwoordWijzigen()">Wachtwoord wijzigen</button>
@@ -905,9 +950,9 @@
             <input class="inp mt-1" x-model="weekDetail.note" placeholder="Bijv. dinsdag graag nog aanvullen">
           </div>
           <div class="flex flex-wrap gap-2 mt-4">
-            <button class="btn btn-primary" x-show="weekDetail.rijen.length&&weekDetail.status!=='akkoord'" @click="beoordeel('akkoord')">Goedkeuren</button>
-            <button class="btn btn-sec" x-show="weekDetail.rijen.length&&weekDetail.status==='ingediend'" @click="beoordeel('afgekeurd')">Afkeuren</button>
-            <button class="btn btn-sec" x-show="weekDetail.status==='akkoord'||weekDetail.status==='ingediend'" @click="beoordeel('heropenen')">Heropenen</button>
+            <button class="btn btn-primary" x-show="weekDetail.rijen.length&&weekDetail.status!=='akkoord'&&!bekijkAls" @click="beoordeel('akkoord')">Goedkeuren</button>
+            <button class="btn btn-sec" x-show="weekDetail.rijen.length&&weekDetail.status==='ingediend'&&!bekijkAls" @click="beoordeel('afgekeurd')">Afkeuren</button>
+            <button class="btn btn-sec" x-show="(weekDetail.status==='akkoord'||weekDetail.status==='ingediend')&&!bekijkAls" @click="beoordeel('heropenen')">Heropenen</button>
             <button class="btn btn-sec ml-auto" @click="weekDetail=null">Sluiten</button>
           </div>
         </div>
@@ -1060,7 +1105,7 @@
 <script>
 function admin(){return{
   authed:false, view:'dashboard', busy:false,
-  ik:{id:0,naam:'',email:'',telefoon:'',rol:'',rechten:[]}, perms:[], rollen:{},
+  ik:{id:0,naam:'',email:'',telefoon:'',rol:'',rechten:[]}, perms:[], rollen:{}, bekijkAls:null,
   today:new Date().toLocaleDateString('nl-NL',{weekday:'long',day:'numeric',month:'long',year:'numeric'}),
   vandaagIso:new Date().toLocaleDateString('sv-SE'),
   // Uren en planning draaien om één gekozen week (maandag als startpunt).
@@ -1068,7 +1113,7 @@ function admin(){return{
   uur:null, uurBusy:false, weekDetail:null,
   planShifts:[], planCollegasEcht:[], planKlanten:[], magPlannen:false, klus:null, klusBusy:false,
   teamUsers:[], teamInvites:[], wachtendAantal:0, medewerker:null, teamBusy:false, linkModal:null,
-  pwOud:'', pwNieuw:'', ikBasis:{naam:'',telefoon:''}, instBasis:'', passkeys:[], pkBusy:false, kanPasskey:false,
+  pwOud:'', pwNieuw:'', toonPw:{oud:false,nieuw:false}, ikBasis:{naam:'',telefoon:''}, instBasis:'', passkeys:[], pkBusy:false, kanPasskey:false,
   toasts:[], toastId:0, vraag:null,
   leads:[], stages:['nieuw','contact','offerte','ingepland','gewonnen','verloren'], leadsLoading:false,
   quotes:[], quotesLoading:false, invoices:[], invoicesLoading:false,
@@ -1114,7 +1159,8 @@ function admin(){return{
     if(!s||!s.authed){ location.href='/inloggen?terug='+encodeURIComponent(location.pathname); return; }
     this.authed=true; this.ik=s.user; this.perms=s.perms||[]; this.rollen=s.rollen||{};
     this.ikBasis={naam:s.user.naam||'',telefoon:s.user.telefoon||''};
-    this.kanPasskey = !!(window.Passkey && Passkey.beschikbaar());
+    this.bekijkAls = s.bekijkAls || null;
+    this.kanPasskey = !this.bekijkAls && !!(window.Passkey && Passkey.beschikbaar());
     this.weekVan=this.maandagVan(this.vandaagIso);
     // Begin op het scherm dat bij je rechten past.
     this.view = this.mag('leads') ? 'dashboard'
@@ -1335,7 +1381,7 @@ function admin(){return{
   // ══ Planning ═══════════════════════════════════════════════════════════════
   async loadPlanning(){ const d=await this.api('/api/planning?van='+this.weekVan+'&tot='+this.weekTot);
     if(!d.ok) return this.mis(d.error||'Planning kon niet geladen worden.');
-    this.planShifts=d.shifts||[]; this.planCollegasEcht=d.collegas||[]; this.planKlanten=d.klanten||[]; this.magPlannen=!!d.magBeheren; },
+    this.planShifts=d.shifts||[]; this.planCollegasEcht=d.collegas||[]; this.planKlanten=d.klanten||[]; this.magPlannen=!!d.magBeheren && !this.bekijkAls; },
   get planCollegas(){ const l=(this.planCollegasEcht||[]).slice();
     if(this.planShifts.some(s=>!s.user_id)) l.push({id:0,naam:''}); return l; },
   // Alleen actieve medewerkers kun je nog nieuw inplannen.
@@ -1386,6 +1432,16 @@ function admin(){return{
       tekst:'Deel deze link alleen met je eigen medewerkers. Hij is '+(d.dagen||7)+' dagen geldig; elk account dat ermee wordt aangemaakt moet jij eerst goedkeuren.' }; },
   async verlengLink(i){ const d=await this.api('/api/team',{method:'POST',body:JSON.stringify({action:'verleng',id:i.id})});
     if(!d.ok) return this.mis(d.error||'Verlengen mislukt'); this.ok('Link met een week verlengd'); this.loadTeam(); },
+
+  // Meekijken met het dashboard van een medewerker (alleen lezen).
+  bekijkAlsMedewerker(u){ this.vraagBevestiging({
+    titel:'Bekijken als '+(u.naam||u.email)+'?',
+    tekst:'Je ziet het dashboard precies zoals '+(u.naam||u.email)+' het ziet. Wijzigen kan in die modus niet.',
+    ja:'Bekijken',
+    actie:async()=>{ const d=await this.api('/api/session',{method:'POST',body:JSON.stringify({action:'bekijk-als',id:u.id})});
+      if(!d.ok) return this.mis(d.error||'Mislukt'); location.href='/admin'; } }); },
+  async stopBekijken(){ const d=await this.api('/api/session',{method:'POST',body:JSON.stringify({action:'stop-bekijken'})});
+    if(!d.ok) return this.mis(d.error||'Mislukt'); location.href='/admin'; },
 
   beoordeelAanmelding(u,actie){
     const goed = actie==='goedkeuren';

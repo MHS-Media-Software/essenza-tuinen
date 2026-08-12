@@ -118,6 +118,10 @@ function ensureSchema() {
     .then(() => run([{ sql: 'ALTER TABLE products ADD COLUMN btw REAL DEFAULT 21' }]).catch(() => {}))
     // 'wacht' = via een deelbare link aangemaakt, moet nog goedgekeurd worden.
     .then(() => run([{ sql: "ALTER TABLE users ADD COLUMN status TEXT DEFAULT 'actief'" }]).catch(() => {}))
+    // Onthoudt of we deze medewerker al een keer een passkey hebben aangeboden.
+    .then(() => run([{ sql: 'ALTER TABLE users ADD COLUMN passkey_gevraagd INTEGER DEFAULT 0' }]).catch(() => {}))
+    // 'sso' = via Google-teamlogin binnengekomen MHS-account (geen wachtwoord).
+    .then(() => run([{ sql: "ALTER TABLE users ADD COLUMN via TEXT DEFAULT 'lokaal'" }]).catch(() => {}))
     .catch(e => { _schemaReady = null; throw e; });
   return _schemaReady;
 }
@@ -207,15 +211,23 @@ async function currentUser(req) {
   req._etUser = null;
   const p = verifyToken(readCookie(req, COOKIE));
   if (p && p.u) {
-    const rows = await q('SELECT id,email,naam,telefoon,rol,rechten,actief,pass_version FROM users WHERE id=?', [p.u]);
+    const rows = await q('SELECT id,email,naam,telefoon,rol,rechten,actief,status,via,pass_version,passkey_gevraagd FROM users WHERE id=?', [p.u]);
     const u = rows[0];
     if (u && u.actief && Number(u.pass_version || 1) === Number(p.v || 1)) {
       let rechten = []; try { rechten = JSON.parse(u.rechten || '[]'); } catch { rechten = []; }
       req._etUser = { ...u, rechten: cleanPerms(rechten, u.rol) };
+      // Meekijken als een medewerker: 'a' is de beheerder die dat gestart is.
+      if (p.a) {
+        const b = (await q('SELECT id,naam,email FROM users WHERE id=? AND actief=1', [p.a]))[0];
+        if (b) req._etUser.bekijkAls = { door: b.id, doorNaam: b.naam || b.email };
+        else req._etUser = null; // beheerder bestaat niet meer → sessie ongeldig
+      }
     }
   }
   return req._etUser;
 }
+// Meekijken is nadrukkelijk alleen-lezen.
+function isMeekijken(u) { return !!(u && u.bekijkAls); }
 async function hasPerm(req, perm) {
   const u = await currentUser(req);
   if (!u) return false;
@@ -227,6 +239,10 @@ async function requirePerm(req, res, perm) {
   if (!u) { res.status(401).json({ ok: false, error: 'auth' }); return false; }
   if (perm && !u.rechten.includes(perm)) {
     res.status(403).json({ ok: false, error: 'Je hebt geen toegang tot dit onderdeel.' });
+    return false;
+  }
+  if (isMeekijken(u) && req.method !== 'GET') {
+    res.status(403).json({ ok: false, error: 'Je kijkt mee als ' + (u.naam || u.email) + '. Wijzigen kan alleen vanuit je eigen account.' });
     return false;
   }
   return true;
@@ -242,8 +258,11 @@ function zetCookie(res, str) {
   lijst.push(str);
   res.setHeader('Set-Cookie', lijst);
 }
-function setAuthCookie(res, user) {
-  const tok = signToken({ u: user.id, v: Number(user.pass_version || 1), exp: Date.now() + 7 * 864e5 });
+// alsVan = id van de beheerder die meekijkt (leeg bij een gewone sessie).
+function setAuthCookie(res, user, alsVan) {
+  const payload = { u: user.id, v: Number(user.pass_version || 1), exp: Date.now() + 7 * 864e5 };
+  if (alsVan) { payload.a = alsVan; payload.exp = Date.now() + 2 * 3600e3; } // meekijken vervalt na 2 uur
+  const tok = signToken(payload);
   zetCookie(res, `${COOKIE}=${tok}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${7 * 86400}`);
 }
 function clearAuthCookie(res) {
@@ -353,7 +372,7 @@ function weekStart(datum) {
 
 export { run, q, exec, ensureSchema, getSetting, setSetting, nextSeq, readBody, COOKIE,
   hashPw, verifyPw, customerEmail, setCustomerCookie, clearCustomerCookie,
-  PERMS, PERM_KEYS, ROLLEN, cleanPerms, currentUser, hasPerm, requirePerm, requireUser,
+  PERMS, PERM_KEYS, ROLLEN, cleanPerms, currentUser, hasPerm, requirePerm, requireUser, isMeekijken,
   setAuthCookie, clearAuthCookie, userCount, tooManyAttempts, noteAttempt, clearAttempts,
   setChallengeCookie, leesChallenge, clearChallengeCookie,
   randomToken, isoWeek, weekStart };

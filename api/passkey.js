@@ -27,6 +27,14 @@ export default async function handler(req, res) {
     const b = req.method === 'GET' ? {} : await db.readBody(req);
     const actie = b.action || '';
 
+    // Meekijken is alleen-lezen: geen passkeys aanmaken of verwijderen.
+    if (req.method !== 'GET' && actie !== 'login-start' && actie !== 'login-klaar') {
+      const kijker = await db.currentUser(req);
+      if (db.isMeekijken(kijker)) {
+        return res.status(403).json({ ok: false, error: 'Je kijkt mee; passkeys beheren kan alleen vanuit je eigen account.' });
+      }
+    }
+
     // ── Mijn passkeys ────────────────────────────────────────────────────
     if (req.method === 'GET') {
       const ik = await db.currentUser(req);
@@ -99,6 +107,7 @@ export default async function handler(req, res) {
       await db.exec('DELETE FROM passkeys WHERE cred_id=?', [credId]).catch(() => {});
       await db.exec('INSERT INTO passkeys(user_id,cred_id,public_key,sign_count,naam,created) VALUES(?,?,?,?,?,?)',
         [ik.id, credId, b64u(ad.coseBytes), ad.counter || 0, naam, NU()]);
+      await db.exec('UPDATE users SET passkey_gevraagd=1 WHERE id=?', [ik.id]).catch(() => {});
       return res.status(200).json({ ok: true, naam });
     }
 

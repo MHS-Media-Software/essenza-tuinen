@@ -19,6 +19,7 @@ export default async function handler(req, res) {
       return res.status(200).json({
         ok: true, authed: !!u, setup,
         user: u ? publiek(u) : null,
+        bekijkAls: (u && u.bekijkAls) || null,
         perms: db.PERMS, rollen: db.ROLLEN,
       });
     }
@@ -58,6 +59,7 @@ export default async function handler(req, res) {
       if (b.action === 'wachtwoord') {
         const u = await db.currentUser(req);
         if (!u) return res.status(401).json({ ok: false, error: 'auth' });
+        if (db.isMeekijken(u)) return res.status(403).json({ ok: false, error: 'Je kijkt mee; wijzigen kan alleen vanuit je eigen account.' });
         const nieuw = String(b.nieuw || '');
         if (nieuw.length < 10) return res.status(400).json({ ok: false, error: 'Kies een wachtwoord van minimaal 10 tekens.' });
         const rij = (await db.q('SELECT pass_hash, pass_version FROM users WHERE id=?', [u.id]))[0];
@@ -70,10 +72,42 @@ export default async function handler(req, res) {
         return res.status(200).json({ ok: true });
       }
 
+      // ── Meekijken als een medewerker (alleen-lezen) ──────────────────────
+      if (b.action === 'bekijk-als') {
+        const ik = await db.currentUser(req);
+        if (!ik) return res.status(401).json({ ok: false, error: 'auth' });
+        if (db.isMeekijken(ik)) return res.status(400).json({ ok: false, error: 'Je kijkt al mee. Ga eerst terug naar je eigen account.' });
+        if (!ik.rechten.includes('team')) return res.status(403).json({ ok: false, error: 'Je hebt geen toegang tot dit onderdeel.' });
+        const doel = (await db.q('SELECT * FROM users WHERE id=?', [+b.id || 0]))[0];
+        if (!doel || !doel.actief) return res.status(404).json({ ok: false, error: 'Deze medewerker is niet (meer) actief.' });
+        if (doel.id === ik.id) return res.status(400).json({ ok: false, error: 'Je bekijkt je eigen dashboard al.' });
+        db.setAuthCookie(res, doel, ik.id);
+        return res.status(200).json({ ok: true, naam: doel.naam || doel.email });
+      }
+
+      // ── Terug naar je eigen account ──────────────────────────────────────
+      if (b.action === 'stop-bekijken') {
+        const ik = await db.currentUser(req);
+        if (!ik || !db.isMeekijken(ik)) return res.status(400).json({ ok: false, error: 'Je kijkt niet mee.' });
+        const beheerder = (await db.q('SELECT * FROM users WHERE id=? AND actief=1', [ik.bekijkAls.door]))[0];
+        if (!beheerder) { db.clearAuthCookie(res); return res.status(401).json({ ok: false, error: 'Je eigen account is niet meer actief.' }); }
+        db.setAuthCookie(res, beheerder);
+        return res.status(200).json({ ok: true });
+      }
+
+      // ── Passkey-aanbod afgehandeld (ingesteld of overgeslagen) ───────────
+      if (b.action === 'passkey-gezien') {
+        const u = await db.currentUser(req);
+        if (!u) return res.status(401).json({ ok: false, error: 'auth' });
+        await db.exec('UPDATE users SET passkey_gevraagd=1 WHERE id=?', [u.id]);
+        return res.status(200).json({ ok: true });
+      }
+
       // ── Eigen naam/telefoon bijwerken ────────────────────────────────────
       if (b.action === 'profiel') {
         const u = await db.currentUser(req);
         if (!u) return res.status(401).json({ ok: false, error: 'auth' });
+        if (db.isMeekijken(u)) return res.status(403).json({ ok: false, error: 'Je kijkt mee; wijzigen kan alleen vanuit je eigen account.' });
         await db.exec('UPDATE users SET naam=?, telefoon=? WHERE id=?',
           [String(b.naam || '').trim() || u.naam, String(b.telefoon || '').trim(), u.id]);
         return res.status(200).json({ ok: true });
@@ -89,7 +123,7 @@ export default async function handler(req, res) {
       const u = (await db.q('SELECT * FROM users WHERE email=?', [email]))[0];
       // Bewust één en dezelfde melding, zodat niet te achterhalen is welke
       // e-mailadressen een account hebben.
-      if (!u || !db.verifyPw(pw, u.pass_hash)) {
+      if (!u || !u.pass_hash || !db.verifyPw(pw, u.pass_hash)) {
         await db.noteAttempt(req, email);
         return res.status(401).json({ ok: false, error: 'Onjuist e-mailadres of wachtwoord.' });
       }
@@ -104,7 +138,10 @@ export default async function handler(req, res) {
       await db.exec('UPDATE users SET last_login=? WHERE id=?', [new Date().toISOString(), u.id]);
       db.setAuthCookie(res, u);
       let rechten = []; try { rechten = JSON.parse(u.rechten || '[]'); } catch { rechten = []; }
-      return res.status(200).json({ ok: true, user: { ...publiek(u), rechten: db.cleanPerms(rechten, u.rol) } });
+      // Eerste keer inloggen zonder passkey? Dan bieden we er eenmalig een aan.
+      const [{ n }] = await db.q('SELECT COUNT(*) AS n FROM passkeys WHERE user_id=?', [u.id]);
+      const passkeyVragen = !n && !u.passkey_gevraagd;
+      return res.status(200).json({ ok: true, passkeyVragen, user: { ...publiek(u), rechten: db.cleanPerms(rechten, u.rol) } });
     }
 
     return res.status(405).json({ ok: false, error: 'method' });

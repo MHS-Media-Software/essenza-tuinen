@@ -9,7 +9,7 @@ function rij(u) {
   let rechten = []; try { rechten = JSON.parse(u.rechten || '[]'); } catch { rechten = []; }
   return {
     id: u.id, naam: u.naam, email: u.email, telefoon: u.telefoon || '', rol: u.rol,
-    rechten: db.cleanPerms(rechten, u.rol), actief: !!u.actief, status: u.status || 'actief',
+    rechten: db.cleanPerms(rechten, u.rol), actief: !!u.actief, status: u.status || 'actief', via: u.via || 'lokaal',
     created: u.created, last_login: u.last_login,
   };
 }
