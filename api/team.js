@@ -149,12 +149,40 @@ export default async function handler(req, res) {
       return res.status(200).json({ ok: true, user: rij(na) });
     }
 
-    // ── Openstaande uitnodiging intrekken ─────────────────────────────────
+    // ── Uitnodiging intrekken of medewerker verwijderen ───────────────────
     if (req.method === 'DELETE') {
       const b = await db.readBody(req);
-      if (!b.invite_id) return res.status(400).json({ ok: false, error: 'Alleen uitnodigingen kunnen worden ingetrokken. Zet een medewerker anders op non-actief.' });
-      await db.exec('DELETE FROM invites WHERE id=?', [+b.invite_id]);
-      return res.status(200).json({ ok: true });
+      if (b.invite_id) {
+        await db.exec('DELETE FROM invites WHERE id=?', [+b.invite_id]);
+        return res.status(200).json({ ok: true });
+      }
+
+      const id = +b.id || 0;
+      const u = (await db.q('SELECT * FROM users WHERE id=?', [id]))[0];
+      if (!u) return res.status(404).json({ ok: false, error: 'Medewerker niet gevonden.' });
+      if (id === ik.id) return res.status(400).json({ ok: false, error: 'Je kunt je eigen account niet verwijderen.' });
+      if (await laatsteBeheerder(id)) {
+        return res.status(400).json({ ok: false, error: 'Er moet minstens één beheerder blijven die medewerkers kan beheren.' });
+      }
+
+      // Verwijderen mag alleen als er geen werk aan hangt: anders blijven er
+      // urenregels achter zonder naam en kloppen de weekoverzichten niet meer.
+      const [{ n: urenN }] = await db.q('SELECT COUNT(*) AS n FROM hours WHERE user_id=?', [id]);
+      const [{ n: klusN }] = await db.q('SELECT COUNT(*) AS n FROM shifts WHERE user_id=?', [id]);
+      if (urenN || klusN) {
+        const delen = [];
+        if (urenN) delen.push(`${urenN} urenregel${urenN === 1 ? '' : 's'}`);
+        if (klusN) delen.push(`${klusN} ingeplande klus${klusN === 1 ? '' : 'sen'}`);
+        return res.status(409).json({
+          ok: false, urenN, klusN,
+          error: `${u.naam || u.email} heeft ${delen.join(' en ')}. Zet het account op non-actief — dan blijft de historie kloppen en kan diegene niet meer inloggen.`,
+        });
+      }
+
+      await db.exec('DELETE FROM passkeys WHERE user_id=?', [id]).catch(() => {});
+      await db.exec('DELETE FROM invites WHERE user_id=? OR email=?', [id, u.email]).catch(() => {});
+      await db.exec('DELETE FROM users WHERE id=?', [id]);
+      return res.status(200).json({ ok: true, naam: u.naam || u.email });
     }
 
     return res.status(405).json({ ok: false, error: 'method' });

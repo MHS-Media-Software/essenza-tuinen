@@ -1077,7 +1077,10 @@
                 <input type="checkbox" class="w-4 h-4 accent-[#0B9D46]" x-model="medewerker.actief">
                 <span class="text-sm">Account is actief <span style="color:#6B7060">— uitzetten sluit deze medewerker direct buiten</span></span>
               </label>
-              <button class="btn btn-sec mt-2" @click="herstelLink(medewerker)">Wachtwoord-herstellink sturen</button>
+              <div class="flex flex-wrap gap-2 mt-2">
+                <button class="btn btn-sec" @click="herstelLink(medewerker)">Wachtwoord-herstellink sturen</button>
+                <button class="btn btn-danger" x-show="medewerker.id!==ik.id" @click="verwijderMedewerker(medewerker)">Medewerker verwijderen</button>
+              </div>
             </div>
           </template>
 
@@ -1468,6 +1471,16 @@ function admin(){return{
       if(!d.ok) return this.mis(d.error||'Mislukt'); location.href='/admin'; } }); },
   async stopBekijken(){ const d=await this.api('/api/session',{method:'POST',body:JSON.stringify({action:'stop-bekijken'})});
     if(!d.ok) return this.mis(d.error||'Mislukt'); location.href='/admin'; },
+
+  // Verwijderen kan alleen als er geen uren of klussen aan hangen; de server
+  // legt precies uit waarom niet en wijst dan naar non-actief zetten.
+  verwijderMedewerker(u){ this.vraagBevestiging({
+    titel:'Medewerker verwijderen?',
+    tekst:(u.naam||u.email)+' wordt definitief verwijderd, inclusief eventuele passkeys. Dit kan niet ongedaan gemaakt worden.',
+    ja:'Verwijderen', gevaar:true,
+    actie:async()=>{ const d=await this.api('/api/team',{method:'DELETE',body:JSON.stringify({id:u.id})});
+      if(!d.ok) return this.mis(d.error||'Verwijderen mislukt');
+      this.medewerker=null; this.ok((d.naam||'Medewerker')+' verwijderd'); this.loadTeam(); } }); },
 
   beoordeelAanmelding(u,actie){
     const goed = actie==='goedkeuren';
