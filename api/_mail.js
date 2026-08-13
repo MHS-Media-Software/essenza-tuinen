@@ -1,12 +1,20 @@
-// Gedeelde mailverzending: SMTP (indien geconfigureerd), anders Resend, anders
-// een mailto-terugval zodat de beheerder de mail alsnog zelf kan versturen.
+// Gedeelde mailverzending: een eigen mailserver van de klant gaat voor, daarna
+// de centrale mailbox via de MAIHS-gateway, dan Resend, en anders een
+// mailto-terugval zodat de beheerder de mail alsnog zelf kan versturen.
+//
+// De centrale mailbox (email@mhsmedia.email) telt NIET als eigen mailserver:
+// staat die in de SMTP_*-env, dan is dat een kopie van de bureau-gegevens en
+// hoort de mail via de gateway te lopen.
 import nodemailer from 'nodemailer';
 import * as db from './_db.js';
 import { getBedrijf } from './_doc.js';
+import { eigenMailserver, gatewayBeschikbaar, mailViaGateway } from './_gateway.js';
 
 function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
 
 function mailProvider() {
+  if (eigenMailserver()) return 'smtp';
+  if (gatewayBeschikbaar()) return 'gateway';
   if (process.env.SMTP_HOST) return 'smtp';
   if (process.env.RESEND_API_KEY) return 'resend';
   return null;
@@ -38,6 +46,19 @@ async function sendMail({ to, subject, html, text, refType, refId }) {
   const log = (status, provider, fout) => db.exec(
     'INSERT INTO mails(ref_type,ref_id,aan,onderwerp,status,provider,fout,created) VALUES(?,?,?,?,?,?,?,?)',
     [refType || 'mail', refId || 0, to, subject, status, provider, fout || null, now]).catch(() => {});
+
+  // Zonder eigen mailserver loopt het via de centrale mailbox bij MAIHS. Lukt
+  // dat niet, dan alsnog langs de lokale route: een lead of herstellink mag niet
+  // verdwijnen omdat een centrale dienst even weg is. Bij een time-out ná
+  // verzending kan dat een dubbele mail geven — het minste kwaad.
+  if (!eigenMailserver() && gatewayBeschikbaar()) {
+    const g = await mailViaGateway({ to, subject, html, text, fromName: bedrijf.naam });
+    if (g.ok) {
+      await log('verzonden', 'gateway');
+      return { sent: true, provider: 'gateway' };
+    }
+    console.error('[mail] gateway mislukt (' + g.error + ') — terugval op de lokale route');
+  }
 
   if (process.env.SMTP_HOST) {
     const port = +(process.env.SMTP_PORT || 465);

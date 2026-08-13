@@ -3,9 +3,18 @@
 import crypto from 'node:crypto';
 import * as db from '../../_db.js';
 import { ssoBeschikbaar, googleRedirectUri, makeProxyState, siteOrigin, TEAM_SSO_DOMAIN } from '../../_sso.js';
+import { googleClientId } from '../../_gateway.js';
 
-export default function handler(req, res) {
+export default async function handler(req, res) {
   if (!ssoBeschikbaar()) {
+    res.writeHead(302, { Location: '/inloggen?sso=notconfigured' });
+    return res.end();
+  }
+
+  // Eigen client-id uit de env, anders die van de centrale gateway. Alleen dat
+  // laatste kost een netwerkaanroep, en die zit kortstondig in het geheugen.
+  const clientId = await googleClientId();
+  if (!clientId) {
     res.writeHead(302, { Location: '/inloggen?sso=notconfigured' });
     return res.end();
   }
@@ -14,7 +23,7 @@ export default function handler(req, res) {
   db.setChallengeCookie(res, 'sso', nonce);
 
   const params = new URLSearchParams({
-    client_id: process.env.GOOGLE_CLIENT_ID,
+    client_id: clientId,
     redirect_uri: googleRedirectUri(req),
     response_type: 'code',
     scope: 'openid email profile',

@@ -2,14 +2,17 @@
 // Zelfde opzet als op de andere klantsites, zodat één redirect-URI bij Google
 // volstaat: de centrale proxy op software.mhsmedia.nl stuurt de callback door.
 import crypto from 'node:crypto';
+import { googleOauthBeschikbaar, googleTokenExchange } from './_gateway.js';
 
 const TEAM_SSO_DOMAIN = 'mhsmedia.nl';
 
 const proxySecret = () => (process.env.OAUTH_PROXY_SECRET || '').trim();
 const proxyBase = () => (process.env.OAUTH_REDIRECT_BASE || '').replace(/\/$/, '');
 
+// Eigen clientpaar in de env, óf de centrale MAIHS-gateway die het secret
+// bijhoudt. Zonder allebei is er niets om mee in te loggen.
 function ssoBeschikbaar() {
-  return !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
+  return googleOauthBeschikbaar();
 }
 function useProxy() {
   return !!(proxySecret() && proxyBase());
@@ -48,17 +51,13 @@ function readProxyState(state) {
 }
 
 // Wisselt de authorization code in voor een token en haalt het profiel op.
+// Met een eigen clientpaar gaat dat rechtstreeks naar Google; anders via de
+// centrale gateway, die het secret toevoegt en Google's antwoord doorgeeft.
 async function fetchGoogleIdentity(code, redirectUri) {
-  const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      code,
-      client_id: process.env.GOOGLE_CLIENT_ID || '',
-      client_secret: process.env.GOOGLE_CLIENT_SECRET || '',
-      redirect_uri: redirectUri,
-      grant_type: 'authorization_code',
-    }),
+  const tokenRes = await googleTokenExchange({
+    code,
+    redirect_uri: redirectUri,
+    grant_type: 'authorization_code',
   });
   if (!tokenRes.ok) throw new Error('token-uitwisseling mislukt (' + tokenRes.status + ')');
   const tok = await tokenRes.json();

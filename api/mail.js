@@ -1,9 +1,11 @@
 // Verstuur een offerte of factuur per e-mail naar de klant (met deel-link).
-// Gebruikt Resend als RESEND_API_KEY is ingesteld; anders wordt een mailto-fallback
-// teruggegeven zodat de beheerder de mail alsnog handmatig kan versturen.
+// Een eigen mailserver van de klant gaat voor, daarna de centrale mailbox via de
+// MAIHS-gateway, dan Resend; lukt niets, dan komt er een mailto-fallback terug
+// zodat de beheerder de mail alsnog handmatig kan versturen.
 import * as db from './_db.js';
 import { getBedrijf, euro } from './_doc.js';
 import nodemailer from 'nodemailer';
+import { eigenMailserver, gatewayBeschikbaar, mailViaGateway } from './_gateway.js';
 
 export default async function handler(req, res) {
   try {
@@ -45,7 +47,19 @@ export default async function handler(req, res) {
       if (isQuote && doc.status === 'concept') await db.exec("UPDATE quotes SET status='verzonden', updated=? WHERE id=?", [now, id]).catch(() => {});
     }
 
-    // 1) SMTP (bv. Strato) heeft voorrang wanneer geconfigureerd.
+    // 1) Zonder eigen mailserver van de klant loopt het via de centrale mailbox
+    // bij MAIHS. Faalt dat, dan alsnog de lokale route hieronder — een offerte
+    // mag niet blijven hangen omdat een centrale dienst even weg is.
+    if (!eigenMailserver() && gatewayBeschikbaar()) {
+      const g = await mailViaGateway({ to: aan, subject: onderwerp, html, text: tekst, fromName: bedrijf.naam });
+      if (g.ok) {
+        await markVerzonden('gateway');
+        return res.status(200).json({ ok: true, sent: true, link });
+      }
+      console.error('[mail] gateway mislukt (' + g.error + ') — terugval op de lokale route');
+    }
+
+    // 2) Eigen SMTP (bv. Strato) wanneer geconfigureerd.
     if (smtpHost) {
       const port = +(process.env.SMTP_PORT || 465);
       const transporter = nodemailer.createTransport({

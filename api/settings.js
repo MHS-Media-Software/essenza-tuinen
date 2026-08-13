@@ -3,6 +3,7 @@
 // wijzigen vereist het recht 'instellingen'.
 import * as db from './_db.js';
 import { DEFAULT_BEDRIJF } from './_doc.js';
+import { mailProvider } from './_mail.js';
 
 export default async function handler(req, res) {
   try {
@@ -15,7 +16,7 @@ export default async function handler(req, res) {
         ok: true,
         uurtarief: Number(await db.getSetting('uurtarief', 55)) || 55,
         bedrijf,
-        mailProvider: process.env.SMTP_HOST ? 'smtp' : (process.env.RESEND_API_KEY ? 'resend' : null),
+        mailProvider: mailProvider(),
       });
     }
     if (req.method === 'PUT') {

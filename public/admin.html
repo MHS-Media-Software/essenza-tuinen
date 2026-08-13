@@ -398,7 +398,7 @@
         <div class="card p-5">
           <h2 class="font-h font-bold mb-1">E-mailverzending</h2>
           <template x-if="mailProvider">
-            <p class="text-sm" style="color:#087A37">✓ Mailserver gekoppeld (<span x-text="mailProvider"></span>). Offertes en facturen worden direct per e-mail verstuurd.</p>
+            <p class="text-sm" style="color:#087A37">✓ Mailserver gekoppeld (<span x-text="mailProvider==='gateway'?'centrale MHS-mailbox':mailProvider"></span>). Offertes en facturen worden direct per e-mail verstuurd.</p>
           </template>
           <template x-if="!mailProvider">
             <p class="text-sm" style="color:#6B7060">Er is nog geen mailserver gekoppeld. Bij “Verstuur” opent de mail in uw eigen mailprogramma met een klantlink. Koppel een provider door de omgevingsvariabele <b>RESEND_API_KEY</b> (en optioneel <b>RESEND_FROM</b>) in Vercel in te stellen voor automatische verzending.</p>
