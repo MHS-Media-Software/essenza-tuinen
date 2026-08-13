@@ -36,6 +36,33 @@ function valideer(b, uren) {
 
 const publiek = (r) => ({ ...r, akkoord: r.status === 'akkoord', vergrendeld: VERGRENDELD.includes(r.status) });
 
+const isDatum = (s) => /^\d{4}-\d{2}-\d{2}$/.test(String(s || ''));
+// Maandag van een ISO-week als '2026-W33' — nog gebruikt door oudere,
+// nog niet herladen beheerpagina's die de week meesturen in plaats van data.
+function weekNaarDatum(week) {
+  const m = String(week || '').match(/^(\d{4})-W(\d{2})$/);
+  if (!m) return null;
+  const eersteWeek = new Date(db.weekStart(`${m[1]}-01-04`) + 'T00:00:00Z');
+  return new Date(eersteWeek.getTime() + (+m[2] - 1) * 7 * 864e5).toISOString().slice(0, 10);
+}
+
+// Indienen en goedkeuren gaan over een datumbereik: zo werkt een week net zo
+// goed als een kalendermaand, ook als die week over twee maanden heen loopt.
+// Elke urenregel krijgt los zijn status, dus er kan niets tussen wal en schip.
+function periode(b) {
+  let van = String(b.van || '').slice(0, 10);
+  let tot = String(b.tot || '').slice(0, 10);
+  if (!isDatum(van) && b.week) {
+    const maandag = weekNaarDatum(b.week);
+    if (maandag) { van = maandag; tot = new Date(new Date(`${maandag}T00:00:00Z`).getTime() + 6 * 864e5).toISOString().slice(0, 10); }
+  }
+  if (!isDatum(van) || !isDatum(tot)) return { fout: 'Kies een periode.' };
+  if (tot < van) return { fout: 'De einddatum ligt vóór de begindatum.' };
+  const dagen = (new Date(`${tot}T00:00:00Z`) - new Date(`${van}T00:00:00Z`)) / 864e5;
+  if (dagen > 61) return { fout: 'Kies hooguit één maand tegelijk.' };
+  return { van, tot };
+}
+
 export default async function handler(req, res) {
   try {
     await db.ensureSchema();
@@ -137,23 +164,26 @@ export default async function handler(req, res) {
       if (b.action === 'indienen') {
         const voorId = b.user_id && +b.user_id !== ik.id ? +b.user_id : ik.id;
         if (voorId !== ik.id && !magAlles) return res.status(403).json({ ok: false, error: 'Geen toegang.' });
-        const week = String(b.week || '');
-        const n = await db.exec("UPDATE hours SET status='ingediend', updated=? WHERE user_id=? AND week=? AND status IN ('concept','afgekeurd')",
-          [now, voorId, week]);
-        if (!n.rowsAffected) return res.status(400).json({ ok: false, error: 'Er zijn geen uren om in te dienen in deze week.' });
+        const p = periode(b);
+        if (p.fout) return res.status(400).json({ ok: false, error: p.fout });
+        const n = await db.exec(`UPDATE hours SET status='ingediend', updated=?
+          WHERE user_id=? AND datum BETWEEN ? AND ? AND status IN ('concept','afgekeurd')`,
+          [now, voorId, p.van, p.tot]);
+        if (!n.rowsAffected) return res.status(400).json({ ok: false, error: 'Er zijn geen uren om in te dienen in deze periode.' });
         return res.status(200).json({ ok: true, aantal: n.rowsAffected });
       }
 
       if (b.action === 'beoordelen' || b.action === 'heropenen') {
         if (!magAlles) return res.status(403).json({ ok: false, error: 'Je mag uren niet goedkeuren.' });
         const voorId = +b.user_id || 0;
-        const week = String(b.week || '');
-        if (!voorId || !week) return res.status(400).json({ ok: false, error: 'Kies een medewerker en een week.' });
+        const p = periode(b);
+        if (!voorId) return res.status(400).json({ ok: false, error: 'Kies een medewerker.' });
+        if (p.fout) return res.status(400).json({ ok: false, error: p.fout });
         const status = b.action === 'heropenen' ? 'concept' : (b.status === 'afgekeurd' ? 'afgekeurd' : 'akkoord');
         await db.exec(`UPDATE hours SET status=?, beoordeeld_door=?, beoordeeld_op=?, beoordeling_note=?, updated=?
-          WHERE user_id=? AND week=?`,
-          [status, ik.id, status === 'concept' ? null : now, String(b.note || '').slice(0, 300) || null, now, voorId, week]);
-        return res.status(200).json({ ok: true, status });
+          WHERE user_id=? AND datum BETWEEN ? AND ?`,
+          [status, ik.id, status === 'concept' ? null : now, String(b.note || '').slice(0, 300) || null, now, voorId, p.van, p.tot]);
+        return res.status(200).json({ ok: true, status, van: p.van, tot: p.tot });
       }
 
       // Losse regel bijwerken.

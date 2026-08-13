@@ -69,6 +69,11 @@
     .klus.intern{background:#EDEFE6;border-left-color:#9aa08d}
     .dagkop{font-size:.72rem;font-weight:700;padding:.45rem .5rem;color:#4b5043;border-left:1px solid #E6E8DC;background:#F5F7EE}
     .urenrij{display:grid;grid-template-columns:6.5rem 1fr auto;gap:.5rem;align-items:center}
+    /* Week/maand-schakelaar boven de uren */
+    .schakel{display:inline-flex;background:#fff;border:1px solid #E6E8DC;border-radius:.7rem;padding:2px}
+    .schakel button{font-size:.8rem;font-weight:700;padding:.4rem .85rem;border-radius:.55rem;color:#6B7060;cursor:pointer}
+    .schakel button:hover:not(.aan){background:#F5F7EE;color:#1F2113}
+    .schakel button.aan{background:#E4F2E8;color:#087A37}
     /* Eigen account onderin de zijbalk: moet er als knop uitzien, niet als label */
     .konto{width:100%;display:flex;align-items:center;gap:.6rem;padding:.5rem;border-radius:.8rem;text-align:left;
       background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);transition:background .12s,border-color .12s}
@@ -405,18 +410,22 @@
       <section x-show="view==='uren'">
         <div class="flex flex-wrap items-center gap-3 mb-4">
           <h1 class="font-h text-2xl font-bold flex-1">Mijn uren</h1>
+          <div class="schakel">
+            <button :class="!isMaand&&'aan'" @click="zetPeriode('week')">Week</button>
+            <button :class="isMaand&&'aan'" @click="zetPeriode('maand')">Maand</button>
+          </div>
           <div class="flex items-center gap-1">
-            <button class="btn btn-sec !px-3" @click="weekVerzet(-1)" title="Vorige week">‹</button>
-            <button class="btn btn-sec !px-3" :disabled="isDezeWeek" @click="weekNu()">Deze week</button>
-            <button class="btn btn-sec !px-3" @click="weekVerzet(1)" title="Volgende week">›</button>
+            <button class="btn btn-sec !px-3" @click="perVerzet(-1)" :title="isMaand?'Vorige maand':'Vorige week'">‹</button>
+            <button class="btn btn-sec !px-3" :disabled="isDezePeriode" @click="perNu()" x-text="isMaand?'Deze maand':'Deze week'"></button>
+            <button class="btn btn-sec !px-3" @click="perVerzet(1)" :title="isMaand?'Volgende maand':'Volgende week'">›</button>
           </div>
         </div>
-        <p class="text-sm mb-4" style="color:#6B7060" x-text="weekLabel"></p>
+        <p class="text-sm mb-4" style="color:#6B7060" x-text="perLabel"></p>
 
-        <!-- Status van de week -->
+        <!-- Status van de periode -->
         <div class="card p-4 mb-4 flex flex-wrap items-center gap-3">
           <div class="flex-1 min-w-[12rem]">
-            <p class="lbl">Totaal deze week</p>
+            <p class="lbl" x-text="isMaand?'Totaal deze maand':'Totaal deze week'"></p>
             <p class="font-h text-2xl font-bold" x-text="urenTekst(weekTotaal)"></p>
           </div>
           <div class="flex-1 min-w-[12rem]">
@@ -425,7 +434,8 @@
             <p x-show="weekNote" class="text-xs mt-1" style="color:#C0392B" x-text="weekNote"></p>
           </div>
           <div class="flex gap-2">
-            <button class="btn btn-primary" x-show="(weekStatus==='concept'||weekStatus==='afgekeurd') && !bekijkAls" :disabled="!mijnUren.length" @click="weekIndienen()">Week indienen</button>
+            <button class="btn btn-primary" x-show="(weekStatus==='concept'||weekStatus==='afgekeurd') && !bekijkAls" :disabled="!mijnUren.length"
+                    @click="periodeIndienen()" x-text="isMaand?'Maand indienen':'Week indienen'"></button>
             <span x-show="weekStatus==='ingediend'" class="text-sm" style="color:#6B7060">Ingediend — wacht op goedkeuring.</span>
             <span x-show="weekStatus==='akkoord'" class="text-sm font-semibold" style="color:#087A37">Goedgekeurd</span>
           </div>
@@ -447,7 +457,7 @@
 
         <!-- Dagen -->
         <div class="space-y-3">
-          <template x-for="d in weekDagen" :key="d.iso">
+          <template x-for="d in perDagen" :key="d.iso">
             <div class="card p-4" :style="d.vandaag?'border-color:#0B9D46':''">
               <div class="flex items-center gap-3 mb-2">
                 <p class="font-h font-bold text-sm flex-1" x-text="d.label"></p>
@@ -481,22 +491,26 @@
       <section x-show="view==='urenteam'">
         <div class="flex flex-wrap items-center gap-3 mb-4">
           <h1 class="font-h text-2xl font-bold flex-1">Urenoverzicht</h1>
-          <div class="flex items-center gap-1">
-            <button class="btn btn-sec !px-3" @click="weekVerzet(-1)">‹</button>
-            <button class="btn btn-sec !px-3" :disabled="isDezeWeek" @click="weekNu()">Deze week</button>
-            <button class="btn btn-sec !px-3" @click="weekVerzet(1)">›</button>
+          <div class="schakel">
+            <button :class="!isMaand&&'aan'" @click="zetPeriode('week')">Week</button>
+            <button :class="isMaand&&'aan'" @click="zetPeriode('maand')">Maand</button>
           </div>
-          <button class="btn btn-sec" @click="exporteerUren()">Exporteer CSV</button>
+          <div class="flex items-center gap-1">
+            <button class="btn btn-sec !px-3" @click="perVerzet(-1)">‹</button>
+            <button class="btn btn-sec !px-3" :disabled="isDezePeriode" @click="perNu()" x-text="isMaand?'Deze maand':'Deze week'"></button>
+            <button class="btn btn-sec !px-3" @click="perVerzet(1)">›</button>
+          </div>
+          <button class="btn btn-sec" @click="exporteerUren()" x-text="isMaand?'Exporteer maand':'Exporteer week'"></button>
         </div>
-        <p class="text-sm mb-4" style="color:#6B7060" x-text="weekLabel"></p>
+        <p class="text-sm mb-4" style="color:#6B7060" x-text="perLabel"></p>
 
         <div class="card overflow-x-auto mb-4">
-          <table class="w-full text-sm min-w-[46rem]">
+          <table class="w-full text-sm" :class="isMaand?'min-w-[34rem]':'min-w-[46rem]'">
             <thead>
               <tr style="background:#F5F7EE">
                 <th class="text-left font-bold px-4 py-2.5">Medewerker</th>
-                <template x-for="d in weekDagen" :key="d.iso">
-                  <th class="px-2 py-2.5 text-center font-bold text-xs" x-text="d.kort"></th>
+                <template x-for="k in perKolommen" :key="k.key">
+                  <th class="px-2 py-2.5 text-center font-bold text-xs" x-text="k.label"></th>
                 </template>
                 <th class="px-3 py-2.5 text-right font-bold">Totaal</th>
                 <th class="px-3 py-2.5 text-left font-bold">Status</th>
@@ -509,9 +523,9 @@
                     <span x-text="c.naam||c.email"></span>
                     <span x-show="c.actief===0" class="pill zin ml-1" style="background:#EDEFE6;color:#6B7060">uit dienst</span>
                   </td>
-                  <template x-for="d in weekDagen" :key="d.iso">
-                    <td class="px-2 py-2.5 text-center" :style="teamDag(c.id,d.iso)?'':'color:#c9ccbf'"
-                        x-text="teamDag(c.id,d.iso)?urenTekst(teamDag(c.id,d.iso)):'–'"></td>
+                  <template x-for="k in perKolommen" :key="k.key">
+                    <td class="px-2 py-2.5 text-center" :style="teamCel(c.id,k)?'':'color:#c9ccbf'"
+                        x-text="teamCel(c.id,k)?urenTekst(teamCel(c.id,k)):'–'"></td>
                   </template>
                   <td class="px-3 py-2.5 text-right font-bold" x-text="urenTekst(teamTotaal(c.id))"></td>
                   <td class="px-3 py-2.5"><span class="pill zin" :style="statusStyle(teamStatus(c.id))" x-text="statusTekst(teamStatus(c.id))"></span></td>
@@ -521,8 +535,8 @@
             <tfoot>
               <tr style="background:#F5F7EE">
                 <td class="px-4 py-2.5 font-bold">Totaal</td>
-                <template x-for="d in weekDagen" :key="d.iso">
-                  <td class="px-2 py-2.5 text-center font-bold" x-text="teamDagAlles(d.iso)?urenTekst(teamDagAlles(d.iso)):'–'"></td>
+                <template x-for="k in perKolommen" :key="k.key">
+                  <td class="px-2 py-2.5 text-center font-bold" x-text="teamCelAlles(k)?urenTekst(teamCelAlles(k)):'–'"></td>
                 </template>
                 <td class="px-3 py-2.5 text-right font-bold" x-text="urenTekst(teamWeekAlles)"></td>
                 <td></td>
@@ -530,7 +544,8 @@
             </tfoot>
           </table>
         </div>
-        <p class="text-xs" style="color:#6B7060">Klik op een medewerker om de regels te bekijken en de week goed te keuren.</p>
+        <p class="text-xs" style="color:#6B7060"
+           x-text="isMaand?'Klik op een medewerker om de regels te bekijken en de hele maand goed te keuren.':'Klik op een medewerker om de regels te bekijken en de week goed te keuren.'"></p>
       </section>
 
       <!-- PLANNING -->
@@ -995,10 +1010,11 @@
             <h2 class="font-h font-bold text-lg flex-1" x-text="weekDetail.naam"></h2>
             <span class="pill zin" :style="statusStyle(weekDetail.status)" x-text="statusTekst(weekDetail.status)"></span>
           </div>
-          <p class="text-sm mb-4" style="color:#6B7060" x-text="weekLabel"></p>
+          <p class="text-sm mb-4" style="color:#6B7060" x-text="perLabel"></p>
 
           <template x-if="!weekDetail.rijen.length">
-            <p class="text-sm py-6 text-center" style="color:#6B7060">Deze medewerker heeft nog geen uren ingevuld voor deze week.</p>
+            <p class="text-sm py-6 text-center" style="color:#6B7060"
+               x-text="isMaand?'Deze medewerker heeft nog geen uren ingevuld voor deze maand.':'Deze medewerker heeft nog geen uren ingevuld voor deze week.'"></p>
           </template>
           <div class="divide-y" style="border-color:#E6E8DC">
             <template x-for="r in weekDetail.rijen" :key="r.id">
@@ -1182,7 +1198,7 @@ function admin(){return{
   today:new Date().toLocaleDateString('nl-NL',{weekday:'long',day:'numeric',month:'long',year:'numeric'}),
   vandaagIso:new Date().toLocaleDateString('sv-SE'),
   // Uren en planning draaien om één gekozen week (maandag als startpunt).
-  weekVan:'', urenRijen:[], collegas:[], klussen:[], urenLoading:false,
+  weekVan:'', periode:'week', maandVan:'', urenRijen:[], collegas:[], klussen:[], urenLoading:false,
   uur:null, uurBusy:false, weekDetail:null,
   planShifts:[], planCollegasEcht:[], planKlanten:[], magPlannen:false, klus:null, klusBusy:false,
   teamUsers:[], teamInvites:[], wachtendAantal:0, medewerker:null, teamBusy:false, linkModal:null,
@@ -1235,6 +1251,7 @@ function admin(){return{
     this.bekijkAls = s.bekijkAls || null;
     this.kanPasskey = !this.bekijkAls && !!(window.Passkey && Passkey.beschikbaar());
     this.weekVan=this.maandagVan(this.vandaagIso);
+    this.maandVan=this.maandStart(this.vandaagIso);
     // Begin op het scherm dat bij je rechten past.
     this.view = this.mag('leads') ? 'dashboard'
       : (this.mag('uren_eigen') ? 'uren' : (this.mag('planning_bekijken') ? 'planning' : 'account'));
@@ -1368,6 +1385,49 @@ function admin(){return{
   weekVerzet(n){ this.weekVan=this.dagPlus(this.weekVan,7*n); this.laadWeek(); },
   weekNu(){ this.weekVan=this.maandagVan(this.vandaagIso); this.laadWeek(); },
   get isDezeWeek(){ return this.weekVan===this.maandagVan(this.vandaagIso) },
+
+  // ══ Week of kalendermaand ══════════════════════════════════════════════════
+  // Uren en planning draaien om één periode. Indienen, goedkeuren en de export
+  // volgen allemaal het gekozen bereik; de planning blijft altijd per week.
+  get isMaand(){ return this.periode==='maand' },
+  maandStart(iso){ return String(iso).slice(0,8)+'01' },
+  maandEind(iso){ const d=new Date(iso+'T00:00:00'); return new Date(d.getFullYear(),d.getMonth()+1,0).toLocaleDateString('sv-SE') },
+  get perVan(){ return this.isMaand ? this.maandVan : this.weekVan },
+  get perTot(){ return this.isMaand ? this.maandEind(this.maandVan) : this.weekTot },
+  get perLabel(){ return this.isMaand
+    ? new Date(this.maandVan+'T00:00:00').toLocaleDateString('nl-NL',{month:'long',year:'numeric'})
+    : this.weekLabel },
+  get isDezePeriode(){ return this.isMaand
+    ? this.maandVan===this.maandStart(this.vandaagIso)
+    : this.weekVan===this.maandagVan(this.vandaagIso) },
+  zetPeriode(p){ if(this.periode===p) return; this.periode=p;
+    if(p==='maand' && !this.maandVan) this.maandVan=this.maandStart(this.vandaagIso);
+    this.laadWeek(); },
+  perVerzet(n){ if(this.isMaand){ const d=new Date(this.maandVan+'T00:00:00'); d.setMonth(d.getMonth()+n);
+      this.maandVan=new Date(d.getFullYear(),d.getMonth(),1).toLocaleDateString('sv-SE'); }
+    else this.weekVan=this.dagPlus(this.weekVan,7*n);
+    this.laadWeek(); },
+  perNu(){ if(this.isMaand) this.maandVan=this.maandStart(this.vandaagIso); else this.weekVan=this.maandagVan(this.vandaagIso);
+    this.laadWeek(); },
+  // De dagen van de gekozen periode, in dezelfde vorm als weekDagen.
+  get perDagen(){ if(!this.isMaand) return this.weekDagen;
+    const uit=[], eind=this.maandEind(this.maandVan); let iso=this.maandVan;
+    while(iso<=eind){ const d=new Date(iso+'T00:00:00');
+      uit.push({ iso,
+        label:d.toLocaleDateString('nl-NL',{weekday:'long',day:'numeric',month:'long'}),
+        kort:d.toLocaleDateString('nl-NL',{weekday:'short',day:'numeric'}),
+        kort2:d.toLocaleDateString('nl-NL',{weekday:'short',day:'numeric',month:'short'}),
+        vandaag: iso===this.vandaagIso });
+      iso=this.dagPlus(iso,1); }
+    return uit; },
+  // Kolommen van het teamoverzicht: per dag in een week, per week in een maand —
+  // anders zou een maand 31 kolommen breed worden.
+  get perKolommen(){ if(!this.isMaand) return this.weekDagen.map(d=>({key:d.iso,label:d.kort,van:d.iso,tot:d.iso}));
+    const uit=[], eind=this.maandEind(this.maandVan); let van=this.maandVan;
+    while(van<=eind){ const zondag=this.dagPlus(this.maandagVan(van),6); const tot=zondag<eind?zondag:eind;
+      uit.push({ key:'w'+van, label:'wk '+this.isoWeekVan(van).split('-W')[1], van, tot });
+      van=this.dagPlus(tot,1); }
+    return uit; },
   laadWeek(){ if(this.view==='uren')this.loadUren(false); else if(this.view==='urenteam')this.loadUren(true);
     else if(this.view==='planning')this.loadPlanning(); },
   dagKort(iso){ return new Date(iso+'T00:00:00').toLocaleDateString('nl-NL',{weekday:'short',day:'numeric',month:'short'}) },
@@ -1375,7 +1435,7 @@ function admin(){return{
 
   // ══ Mijn uren ══════════════════════════════════════════════════════════════
   async loadUren(iedereen){ this.urenLoading=true;
-    const d=await this.api('/api/hours?van='+this.weekVan+'&tot='+this.weekTot+(iedereen?'&iedereen=1':''));
+    const d=await this.api('/api/hours?van='+this.perVan+'&tot='+this.perTot+(iedereen?'&iedereen=1':''));
     this.urenLoading=false;
     if(!d.ok) return this.mis(d.error||'Uren konden niet geladen worden.');
     this.urenRijen=d.uren||[]; this.collegas=d.collegas||[]; this.klussen=d.klussen||[]; },
@@ -1422,9 +1482,12 @@ function admin(){return{
   verwijderUur(r){ this.vraagBevestiging({ titel:'Uren verwijderen?', tekst:this.dagKort(r.datum)+' · '+this.urenTekst(r.uren), ja:'Verwijderen', gevaar:true,
     actie:async()=>{ const d=await this.api('/api/hours',{method:'DELETE',body:JSON.stringify({id:r.id})});
       if(!d.ok) return this.mis(d.error||'Verwijderen mislukt'); this.ok('Verwijderd'); this.loadUren(this.view==='urenteam'); } }); },
-  weekIndienen(){ this.vraagBevestiging({ titel:'Week indienen?', tekst:'Je uren van '+this.weekLabel+' gaan naar je beheerder. Daarna kun je ze niet meer zelf wijzigen.', ja:'Indienen',
-    actie:async()=>{ const d=await this.api('/api/hours',{method:'PATCH',body:JSON.stringify({action:'indienen',week:this.isoWeekVan(this.weekVan)})});
-      if(!d.ok) return this.mis(d.error||'Indienen mislukt'); this.ok('Week ingediend'); this.loadUren(false); } }); },
+  periodeIndienen(){ this.vraagBevestiging({
+    titel:this.isMaand?'Maand indienen?':'Week indienen?',
+    tekst:'Je uren van '+this.perLabel+' gaan naar je beheerder. Daarna kun je ze niet meer zelf wijzigen.', ja:'Indienen',
+    actie:async()=>{ const d=await this.api('/api/hours',{method:'PATCH',body:JSON.stringify({action:'indienen',van:this.perVan,tot:this.perTot})});
+      if(!d.ok) return this.mis(d.error||'Indienen mislukt');
+      this.ok((this.isMaand?'Maand':'Week')+' ingediend'); this.loadUren(false); } }); },
   // Zelfde ISO-weeknotatie als de server ('2026-W33').
   isoWeekVan(iso){ const d=new Date(iso+'T00:00:00Z'); const dag=d.getUTCDay()||7;
     d.setUTCDate(d.getUTCDate()+4-dag); const start=new Date(Date.UTC(d.getUTCFullYear(),0,1));
@@ -1433,24 +1496,24 @@ function admin(){return{
 
   // ══ Urenoverzicht van het team ═════════════════════════════════════════════
   rijenVan(userId){ return this.urenRijen.filter(r=>r.user_id===userId) },
-  teamDag(userId,iso){ return this.urenRijen.filter(r=>r.user_id===userId&&r.datum===iso).reduce((s,r)=>s+(+r.uren||0),0) },
+  teamCel(userId,k){ return this.urenRijen.filter(r=>r.user_id===userId&&r.datum>=k.van&&r.datum<=k.tot).reduce((s,r)=>s+(+r.uren||0),0) },
+  teamCelAlles(k){ return this.urenRijen.filter(r=>r.datum>=k.van&&r.datum<=k.tot).reduce((s,r)=>s+(+r.uren||0),0) },
   teamTotaal(userId){ return this.rijenVan(userId).reduce((s,r)=>s+(+r.uren||0),0) },
   teamStatus(userId){ return this.statusVan(this.rijenVan(userId)) },
-  teamDagAlles(iso){ return this.urenRijen.filter(r=>r.datum===iso).reduce((s,r)=>s+(+r.uren||0),0) },
   get teamWeekAlles(){ return this.urenRijen.reduce((s,r)=>s+(+r.uren||0),0) },
   get teIndienen(){ return this.collegas.filter(c=>this.teamStatus(c.id)==='ingediend').length },
   openMedewerkerWeek(c){ const rijen=this.rijenVan(c.id);
     this.weekDetail={ id:c.id, naam:c.naam||c.email, rijen, totaal:rijen.reduce((s,r)=>s+(+r.uren||0),0),
       status:this.statusVan(rijen), note:'' }; },
   async beoordeel(wat){ const w=this.weekDetail;
-    const body={ action: wat==='heropenen'?'heropenen':'beoordelen', user_id:w.id, week:this.isoWeekVan(this.weekVan), note:w.note||'' };
+    const body={ action: wat==='heropenen'?'heropenen':'beoordelen', user_id:w.id, van:this.perVan, tot:this.perTot, note:w.note||'' };
     if(wat!=='heropenen') body.status=wat;
     const d=await this.api('/api/hours',{method:'PATCH',body:JSON.stringify(body)});
     if(!d.ok) return this.mis(d.error||'Mislukt');
     this.weekDetail=null;
     this.ok(wat==='akkoord'?'Week goedgekeurd':(wat==='afgekeurd'?'Week afgekeurd':'Week heropend'));
     this.loadUren(true); },
-  exporteerUren(){ window.open('/api/hours?van='+this.weekVan+'&tot='+this.weekTot+'&iedereen=1&export=csv','_blank') },
+  exporteerUren(){ window.open('/api/hours?van='+this.perVan+'&tot='+this.perTot+'&iedereen=1&export=csv','_blank') },
 
   // ══ Planning ═══════════════════════════════════════════════════════════════
   async loadPlanning(){ const d=await this.api('/api/planning?van='+this.weekVan+'&tot='+this.weekTot);
