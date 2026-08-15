@@ -14,20 +14,18 @@ import crypto from 'node:crypto';
 const UA = 'MAIHS-Gateway-Client/1.0';
 
 // De envs heetten MAIHS_AI_* toen de gateway alleen AI deed. Datzelfde token
-// bedient inmiddels ook SE Ranking, Google-OAuth, Ads en mail, dus de vloot gaat
-// over op MHS_GATEWAY_*. Beide namen worden gelezen zolang die omzetting loopt;
-// de oude mag pas weg als elke site de nieuwe heeft.
+// bedient inmiddels ook SE Ranking, Google-OAuth, Ads en mail, dus de vloot draait
+// op MHS_GATEWAY_*. De oude namen staan nergens meer op Vercel en worden hier niet
+// meer gelezen.
 //
-// LET OP het vormverschil — daar zit de valkuil: de OUDE env is een volledig pad
-// ('https://host/api/ai-gateway/messages'), de NIEUWE een kale origin
-// ('https://host'). Daarom leidt alles hieronder de origin af en plakt het zijn
-// eigen pad erachter; een naief 'nieuw or oud' zou met de nieuwe env een dubbel
-// pad opleveren.
-const gatewayUrl = () => (process.env.MHS_GATEWAY_URL || process.env.MAIHS_AI_URL || '').trim();
-const gatewayKey = () => (process.env.MHS_GATEWAY_KEY || process.env.MAIHS_AI_KEY || '').trim();
+// De env is een kale origin ('https://host'), maar de normalisatie hieronder blijft
+// nodig: ze vangt een afsluitende slash en een per ongeluk meegeplakt pad af.
+// Zonder die stap zou een aanroep op een dubbel pad uitkomen.
+const gatewayUrl = () => (process.env.MHS_GATEWAY_URL || '').trim();
+const gatewayKey = () => (process.env.MHS_GATEWAY_KEY || '').trim();
 
-// De MHS-host als kale origin. Knipt de origin uit beide vormen, dus een volledig
-// pad en een kale host (met of zonder afsluitende slash) leveren exact hetzelfde
+// De MHS-host als kale origin. Knipt de origin uit de env-waarde, dus een kale
+// host (met of zonder afsluitende slash) en een vol pad leveren exact hetzelfde
 // op — dat scheelt een env-variabele per site. Alle centrale gateways (config,
 // Google-OAuth, mail) hangen onder diezelfde host en het token dat we toch al
 // hebben geeft er toegang toe.
