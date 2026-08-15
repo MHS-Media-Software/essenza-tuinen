@@ -122,6 +122,10 @@ function ensureSchema() {
     .then(() => run([{ sql: 'ALTER TABLE users ADD COLUMN passkey_gevraagd INTEGER DEFAULT 0' }]).catch(() => {}))
     // 'sso' = via Google-teamlogin binnengekomen MHS-account (geen wachtwoord).
     .then(() => run([{ sql: "ALTER TABLE users ADD COLUMN via TEXT DEFAULT 'lokaal'" }]).catch(() => {}))
+    // Eén klus met meerdere mensen = meerdere regels met dezelfde 'groep'.
+    .then(() => run([{ sql: 'ALTER TABLE shifts ADD COLUMN groep TEXT' }]).catch(() => {}))
+    // Losse namen zonder account die meedraaien (bijvoorbeeld een stagiair).
+    .then(() => run([{ sql: 'ALTER TABLE shifts ADD COLUMN extern TEXT' }]).catch(() => {}))
     .catch(e => { _schemaReady = null; throw e; });
   return _schemaReady;
 }

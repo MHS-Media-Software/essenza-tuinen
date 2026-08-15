@@ -600,10 +600,11 @@
                      @click="cel.kop||!magPlannen||nieuweKlus(cel.iso,c.id)">
                   <span x-show="cel.kop" x-text="(c.naam||'Niet toegewezen')+(c.actief===0?' (uit dienst)':'')"></span>
                   <template x-for="s in cel.klussen" :key="s.id">
-                    <button class="klus" :class="s.soort" @click.stop="bewerkKlus(s)">
+                    <button class="klus" :class="s.soort" @click.stop="klusOpenen(s)">
                       <span class="font-bold block truncate" x-text="s.van?(s.van+(s.tot?'–'+s.tot:'')):(s.soort==='verlof'?'Verlof':'Hele dag')"></span>
                       <span class="block truncate" x-text="s.lead_naam||s.klant||s.titel||'Klus'"></span>
                       <span x-show="s.adres" class="block truncate" style="color:#6B7060" x-text="s.adres"></span>
+                      <span x-show="metWie(s)" class="block truncate" style="color:#087A37" x-text="'met '+metWie(s)"></span>
                     </button>
                   </template>
                 </div>
@@ -622,10 +623,21 @@
               </div>
               <template x-if="!klussenVanDag(d.iso).length"><p class="text-xs" style="color:#9aa08d">Niets ingepland.</p></template>
               <template x-for="s in klussenVanDag(d.iso)" :key="s.id">
-                <button class="klus w-full mb-1" :class="s.soort" @click="bewerkKlus(s)">
-                  <span class="font-bold" x-text="(s.van?s.van+(s.tot?'–'+s.tot:'')+' · ':'')+(s.medewerker||'Niet toegewezen')"></span>
-                  <span class="block" x-text="s.lead_naam||s.klant||s.titel||'Klus'"></span>
-                </button>
+                <div class="klus w-full mb-1.5" :class="s.soort">
+                  <button class="block w-full text-left" @click="klusOpenen(s)">
+                    <span class="font-bold" x-text="(s.van?s.van+(s.tot?'–'+s.tot:'')+' · ':'')+wieAlles(s)"></span>
+                    <span class="block" x-text="s.lead_naam||s.klant||s.titel||(s.soort==='verlof'?'Verlof':'Klus')"></span>
+                    <span x-show="s.adres" class="block" style="color:#6B7060" x-text="s.adres"></span>
+                  </button>
+                  <!-- Direct de route: dit is waar de jongens onderweg op tikken. -->
+                  <a x-show="s.adres" :href="routeUrl(s.adres)" target="_blank" rel="noopener"
+                     class="btn btn-sec !py-1 !px-2.5 !text-xs mt-1.5" @click.stop>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M3 11l19-9-9 19-2-8-8-2z"/>
+                    </svg>
+                    Route
+                  </a>
+                </div>
               </template>
             </div>
           </template>
@@ -1094,16 +1106,31 @@
       <h2 class="font-h font-bold text-lg mb-4" x-text="klus&&klus.id?'Klus wijzigen':'Klus inplannen'"></h2>
       <template x-if="klus">
         <div>
-          <div class="grid sm:grid-cols-2 gap-3">
+          <div class="grid sm:grid-cols-3 gap-3">
             <div><label class="lbl">Datum</label><input type="date" class="inp mt-1" x-model="klus.datum"></div>
-            <div><label class="lbl">Medewerker</label>
-              <select class="inp mt-1" x-model="klus.user_id">
-                <option value="">Nog niet toegewezen</option>
-                <template x-for="c in planCollegasActief" :key="'pc'+c.id"><option :value="String(c.id)" x-text="c.naam"></option></template>
-              </select>
-            </div>
             <div><label class="lbl">Van</label><input type="time" class="inp mt-1" x-model="klus.van"></div>
             <div><label class="lbl">Tot</label><input type="time" class="inp mt-1" x-model="klus.tot"></div>
+          </div>
+
+          <!-- Team: meerdere mensen tegelijk op dezelfde klus -->
+          <div class="mt-3">
+            <label class="lbl">Team <span class="normal-case font-normal">(vink aan wie er meegaan)</span></label>
+            <div class="grid sm:grid-cols-2 gap-1 mt-1">
+              <template x-for="c in planCollegasActief" :key="'pc'+c.id">
+                <label class="flex items-center gap-2.5 p-2 rounded-lg cursor-pointer hover:bg-[#F5F7EE]">
+                  <input type="checkbox" class="w-4 h-4 accent-[#0B9D46]" :value="c.id" x-model.number="klus.user_ids">
+                  <span class="text-sm" x-text="c.naam"></span>
+                </label>
+              </template>
+            </div>
+            <template x-if="!planCollegasActief.length">
+              <p class="text-xs" style="color:#6B7060">Er zijn nog geen actieve medewerkers.</p>
+            </template>
+            <label class="lbl mt-2 block">Zelf invullen <span class="normal-case font-normal">(iemand zonder account, bijvoorbeeld een stagiair)</span></label>
+            <input class="inp mt-1" x-model="klus.extern" placeholder="Bijv. Tim (stagiair), inhuur Van Dijk">
+            <p class="text-[11px] mt-1" style="color:#6B7060">
+              Vink je niemand aan, dan staat de klus onder “Niet toegewezen”. Wie hier met de hand staat kan geen uren invullen — daarvoor is een eigen account nodig.
+            </p>
           </div>
           <div class="mt-3">
             <label class="lbl">Klant</label>
@@ -1122,7 +1149,15 @@
               </select>
             </div>
           </div>
-          <div class="mt-3"><label class="lbl">Adres</label><input class="inp mt-1" x-model="klus.adres" placeholder="Straat en plaats"></div>
+          <div class="mt-3">
+            <label class="lbl">Adres</label>
+            <div class="flex gap-2 mt-1">
+              <input class="inp" x-model="klus.adres" placeholder="Straat en plaats">
+              <a class="btn btn-sec shrink-0" :class="!klus.adres&&'pointer-events-none opacity-45'"
+                 :href="routeUrl(klus.adres)" target="_blank" rel="noopener" title="Route bekijken">Route</a>
+            </div>
+            <p class="text-[11px] mt-1" style="color:#6B7060">Iedereen die op deze klus staat ziet hier een routeknop bij zijn planning.</p>
+          </div>
           <div class="mt-3"><label class="lbl">Notitie voor het team</label><textarea class="inp mt-1" rows="2" x-model="klus.notitie"></textarea></div>
 
           <div class="flex gap-2 mt-5">
@@ -1130,6 +1165,40 @@
             <button class="btn btn-danger" x-show="klus.id" @click="verwijderKlus()">Verwijderen</button>
             <button class="btn btn-sec" @click="klus=null">Annuleren</button>
           </div>
+        </div>
+      </template>
+    </div>
+  </div>
+
+  <!-- KLUSINFO (voor wie de planning niet mag wijzigen) -->
+  <div x-show="klusInfo" x-cloak class="modalbg" @click="klusInfo=null">
+    <div class="card w-full max-w-md p-6 max-h-[90vh] overflow-y-auto" @click.stop x-show="klusInfo">
+      <template x-if="klusInfo">
+        <div>
+          <p class="lbl" x-text="dagKort(klusInfo.datum)+(klusInfo.van?(' · '+klusInfo.van+(klusInfo.tot?'–'+klusInfo.tot:'')):'')"></p>
+          <h2 class="font-h font-bold text-lg mt-1 mb-3" x-text="klusInfo.lead_naam||klusInfo.klant||klusInfo.titel||'Klus'"></h2>
+          <p x-show="klusInfo.titel&&(klusInfo.lead_naam||klusInfo.klant)" class="text-sm mb-3" x-text="klusInfo.titel"></p>
+
+          <div x-show="wieAlles(klusInfo)" class="mb-3">
+            <span class="lbl">Wie gaan er mee</span>
+            <p class="text-sm mt-0.5" x-text="wieAlles(klusInfo)"></p>
+          </div>
+
+          <div x-show="klusInfo.adres" class="rounded-xl p-3 mb-3" style="background:#F5F7EE">
+            <span class="lbl">Adres</span>
+            <p class="text-sm font-semibold mt-0.5" x-text="klusInfo.adres"></p>
+            <div class="flex flex-wrap gap-2 mt-2">
+              <a class="btn btn-primary !py-1.5 !text-xs" :href="routeUrl(klusInfo.adres)" target="_blank" rel="noopener">Route starten</a>
+              <button class="btn btn-sec !py-1.5 !text-xs" @click="kopieerAdres(klusInfo.adres)">Adres kopiëren</button>
+            </div>
+          </div>
+
+          <div x-show="klusInfo.notitie" class="mb-3">
+            <span class="lbl">Notitie</span>
+            <p class="text-sm mt-0.5" x-text="klusInfo.notitie"></p>
+          </div>
+
+          <button class="btn btn-sec w-full justify-center mt-2" @click="klusInfo=null">Sluiten</button>
         </div>
       </template>
     </div>
@@ -1242,7 +1311,7 @@ function admin(){return{
   // Uren en planning draaien om één gekozen week (maandag als startpunt).
   menuOpen:false, weekVan:'', periode:'week', maandVan:'', jaarVan:'', urenRijen:[], collegas:[], klussen:[], urenLoading:false,
   uur:null, uurBusy:false, weekDetail:null,
-  planShifts:[], planCollegasEcht:[], planKlanten:[], magPlannen:false, klus:null, klusBusy:false,
+  planShifts:[], planCollegasEcht:[], planKlanten:[], magPlannen:false, klus:null, klusInfo:null, klusBusy:false,
   teamUsers:[], teamInvites:[], wachtendAantal:0, medewerker:null, teamBusy:false, linkModal:null,
   pwOud:'', pwNieuw:'', toonPw:{oud:false,nieuw:false}, ikBasis:{naam:'',telefoon:''}, instBasis:'', passkeys:[], pkBusy:false, kanPasskey:false,
   toasts:[], toastId:0, vraag:null,
@@ -1588,19 +1657,37 @@ function admin(){return{
     if(this.planShifts.some(s=>!s.user_id)) l.push({id:0,naam:''}); return l; },
   // Alleen actieve medewerkers kun je nog nieuw inplannen.
   get planCollegasActief(){ return (this.planCollegasEcht||[]).filter(c=>c.actief!==0) },
-  klussenVanDag(iso){ return this.planShifts.filter(s=>s.datum===iso) },
+  // Eén klus met drie man staat als drie regels in de database, met dezelfde
+  // 'groep'. In de daglijst tonen we hem daarom één keer, met alle namen erbij.
+  groepVan(s){ return this.planShifts.filter(x=>(s.groep&&x.groep===s.groep)||x.id===s.id) },
+  namenVan(s){ const uit=this.groepVan(s).map(x=>x.medewerker).filter(Boolean);
+    String(s.extern||'').split(/\s*,\s*/).filter(Boolean).forEach(n=>uit.push(n));
+    return uit; },
+  // Alle namen op de klus (voor de daglijst en het infovenster).
+  wieAlles(s){ const n=this.namenVan(s); return n.length?n.join(', '):'Niet toegewezen' },
+  // De rest van het team, gezien vanaf één regel in het rooster.
+  metWie(s){ return this.namenVan(s).filter(n=>n!==s.medewerker).join(', ') },
+  klussenVanDag(iso){ const gezien={};
+    return this.planShifts.filter(s=>{ if(s.datum!==iso) return false;
+      const sleutel=s.groep||('s'+s.id); if(gezien[sleutel]) return false; gezien[sleutel]=1; return true; }); },
   roosterRij(c){ const cellen=[{kop:true,key:'kop'+c.id}];
     this.weekDagen.forEach(d=>{ cellen.push({ key:c.id+'_'+d.iso, iso:d.iso, vandaag:d.vandaag,
       klussen:this.planShifts.filter(s=>s.datum===d.iso&&((s.user_id||0)===c.id)) }); });
     return cellen; },
+  // Navigatie via Google Maps: opent op telefoons gewoon de kaart-app.
+  routeUrl(adres){ return 'https://www.google.com/maps/dir/?api=1&destination='+encodeURIComponent(adres||'') },
+  kopieerAdres(a){ if(navigator.clipboard) navigator.clipboard.writeText(a); this.ok('Adres gekopieerd'); },
   nieuweKlus(iso,userId){ if(!this.magPlannen) return;
-    this.klus={datum:iso||this.vandaagIso,van:'08:00',tot:'16:30',user_id:userId?String(userId):'',
+    this.klus={datum:iso||this.vandaagIso,van:'08:00',tot:'16:30',user_ids:userId?[+userId]:[],extern:'',
       titel:'',keuze:'vrij',klant:'',adres:'',notitie:'',soort:'klus'}; },
-  bewerkKlus(s){ if(!this.magPlannen) return this.toast((s.lead_naam||s.klant||s.titel||'Klus')+(s.adres?(' · '+s.adres):''));
-    this.klus={...s, user_id:s.user_id?String(s.user_id):'', keuze:s.lead_id?String(s.lead_id):'vrij'}; },
+  // Wie mag plannen bewerkt de klus; de rest krijgt de gegevens en de route.
+  klusOpenen(s){ if(this.magPlannen) return this.bewerkKlus(s); this.klusInfo=s; },
+  bewerkKlus(s){ if(!this.magPlannen) return this.klusOpenen(s);
+    this.klus={...s, user_ids:this.groepVan(s).map(x=>x.user_id).filter(Boolean),
+      extern:s.extern||'', keuze:s.lead_id?String(s.lead_id):'vrij'}; },
   async bewaarKlus(){ const k=this.klus; this.klusBusy=true;
-    const body={ datum:k.datum, van:k.van||null, tot:k.tot||null, user_id:k.user_id?+k.user_id:null,
-      titel:k.titel||'', soort:k.soort||'klus', adres:k.adres||'', notitie:k.notitie||'',
+    const body={ datum:k.datum, van:k.van||null, tot:k.tot||null, user_ids:(k.user_ids||[]).map(Number),
+      extern:k.extern||'', titel:k.titel||'', soort:k.soort||'klus', adres:k.adres||'', notitie:k.notitie||'',
       lead_id:k.keuze&&k.keuze!=='vrij'?+k.keuze:null, klant:k.keuze==='vrij'?(k.klant||''):'' };
     const d=k.id ? await this.api('/api/planning',{method:'PATCH',body:JSON.stringify({...body,id:k.id})})
                  : await this.api('/api/planning',{method:'POST',body:JSON.stringify(body)});
