@@ -91,17 +91,27 @@ export default async function handler(req, res) {
          FROM hours h LEFT JOIN users u ON u.id=h.user_id LEFT JOIN leads l ON l.id=h.lead_id
          WHERE ${where} ORDER BY h.datum, h.start, h.id`, args);
 
-      // CSV voor de boekhouding.
+      // CSV voor de boekhouding. Zonder iedereen=1 krijg je \u00E9\u00E9n medewerker,
+      // zodat de boekhouder per persoon een bestand kan opslaan.
       if (qy.export === 'csv') {
         if (!magAlles) return res.status(403).json({ ok: false, error: 'Geen toegang tot de export.' });
         const kop = ['Datum', 'Medewerker', 'Van', 'Tot', 'Pauze (min)', 'Uren', 'Soort', 'Klant', 'Omschrijving', 'Status'];
-        const csv = [kop.join(';')].concat(rows.map(r => [
+        const regels = rows.map(r => [
           r.datum, r.medewerker || '', r.start || '', r.eind || '', r.pauze || 0,
           String(r.uren).replace('.', ','), r.soort || 'werk',
           r.lead_naam || r.project || '', String(r.omschrijving || '').replace(/[\r\n;]/g, ' '), r.status,
-        ].join(';'))).join('\r\n');
+        ].join(';'));
+        // Sluitregel met het totaal: dat is waar de boekhouding op uitkomt.
+        const totaal = rows.reduce((s, r) => s + (+r.uren || 0), 0);
+        regels.push(['', 'TOTAAL', '', '', '', String(Math.round(totaal * 100) / 100).replace('.', ','), '', '', '', ''].join(';'));
+        const csv = [kop.join(';')].concat(regels).join('\r\n');
+        let wie = '';
+        if (!iedereen) {
+          const u = (await db.q('SELECT naam FROM users WHERE id=?', [wieId]))[0];
+          wie = String((u && u.naam) || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+        }
         res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-        res.setHeader('Content-Disposition', `attachment; filename="uren-${van}_${tot}.csv"`);
+        res.setHeader('Content-Disposition', `attachment; filename="uren-${wie ? wie + '-' : ''}${van}_${tot}.csv"`);
         return res.status(200).send('\uFEFF' + csv);
       }
 

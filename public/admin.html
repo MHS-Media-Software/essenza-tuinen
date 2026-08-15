@@ -48,8 +48,11 @@
     .ico{width:18px;height:18px;flex-shrink:0;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;opacity:.8}
     .navi.active .ico{opacity:1}
     /* Meekijken als medewerker: duidelijke balk bovenaan, layout schuift mee */
-    .meekijkbalk{position:fixed;top:0;left:0;right:0;height:2.5rem;z-index:40;display:flex;align-items:center;gap:.75rem;
+    .meekijkbalk{position:fixed;top:0;left:0;right:0;max-width:100vw;height:2.5rem;z-index:40;display:flex;align-items:center;gap:.75rem;
       padding:0 .9rem;background:#8a6d0b;color:#fff;font-size:.82rem;font-weight:600}
+    /* Vastgezette balken mogen nooit meegroeien met een brede tabel verderop:
+       zonder deze grens werd de bovenbalk zo breed als het jaaroverzicht. */
+    .mobbar{max-width:100vw}
     body.meekijken{padding-top:2.5rem}
     body.meekijken .zij{top:2.5rem;height:calc(100vh - 2.5rem)}
     body.meekijken .mobbar{top:2.5rem}
@@ -422,7 +425,7 @@
         <div class="flex flex-wrap items-center gap-3 mb-4">
           <h1 class="font-h text-2xl font-bold flex-1">Mijn uren</h1>
           <div class="schakel">
-            <button :class="!isMaand&&'aan'" @click="zetPeriode('week')">Week</button>
+            <button :class="periode==='week'&&'aan'" @click="zetPeriode('week')">Week</button>
             <button :class="isMaand&&'aan'" @click="zetPeriode('maand')">Maand</button>
           </div>
           <div class="flex items-center gap-1">
@@ -503,20 +506,21 @@
         <div class="flex flex-wrap items-center gap-3 mb-4">
           <h1 class="font-h text-2xl font-bold flex-1">Urenoverzicht</h1>
           <div class="schakel">
-            <button :class="!isMaand&&'aan'" @click="zetPeriode('week')">Week</button>
+            <button :class="periode==='week'&&'aan'" @click="zetPeriode('week')">Week</button>
             <button :class="isMaand&&'aan'" @click="zetPeriode('maand')">Maand</button>
+            <button :class="isJaar&&'aan'" @click="zetPeriode('jaar')">Jaar</button>
           </div>
           <div class="flex items-center gap-1">
             <button class="btn btn-sec !px-3" @click="perVerzet(-1)">‹</button>
-            <button class="btn btn-sec !px-3" :disabled="isDezePeriode" @click="perNu()" x-text="isMaand?'Deze maand':'Deze week'"></button>
+            <button class="btn btn-sec !px-3" :disabled="isDezePeriode" @click="perNu()" x-text="isJaar?'Dit jaar':(isMaand?'Deze maand':'Deze week')"></button>
             <button class="btn btn-sec !px-3" @click="perVerzet(1)">›</button>
           </div>
-          <button class="btn btn-sec" @click="exporteerUren()" x-text="isMaand?'Exporteer maand':'Exporteer week'"></button>
+          <button class="btn btn-sec" @click="exporteerUren()" x-text="isJaar?'Exporteer heel jaar':(isMaand?'Exporteer maand':'Exporteer week')"></button>
         </div>
         <p class="text-sm mb-4" style="color:#6B7060" x-text="perLabel"></p>
 
         <div class="card overflow-x-auto mb-4">
-          <table class="w-full text-sm" :class="isMaand?'min-w-[34rem]':'min-w-[46rem]'">
+          <table class="w-full text-sm" :class="isJaar?'min-w-[52rem]':(isMaand?'min-w-[34rem]':'min-w-[46rem]')">
             <thead>
               <tr style="background:#F5F7EE">
                 <th class="text-left font-bold px-4 py-2.5">Medewerker</th>
@@ -524,7 +528,8 @@
                   <th class="px-2 py-2.5 text-center font-bold text-xs" x-text="k.label"></th>
                 </template>
                 <th class="px-3 py-2.5 text-right font-bold">Totaal</th>
-                <th class="px-3 py-2.5 text-left font-bold">Status</th>
+                <th class="px-3 py-2.5 text-left font-bold" x-show="!isJaar">Status</th>
+                <th class="px-2 py-2.5"><span class="sr-only">Download</span></th>
               </tr>
             </thead>
             <tbody class="divide-y" style="border-color:#E6E8DC">
@@ -539,7 +544,15 @@
                         x-text="teamCel(c.id,k)?urenTekst(teamCel(c.id,k)):'–'"></td>
                   </template>
                   <td class="px-3 py-2.5 text-right font-bold" x-text="urenTekst(teamTotaal(c.id))"></td>
-                  <td class="px-3 py-2.5"><span class="pill zin" :style="statusStyle(teamStatus(c.id))" x-text="statusTekst(teamStatus(c.id))"></span></td>
+                  <td class="px-3 py-2.5" x-show="!isJaar"><span class="pill zin" :style="statusStyle(teamStatus(c.id))" x-text="statusTekst(teamStatus(c.id))"></span></td>
+                  <td class="px-2 py-2.5 text-right">
+                    <button class="btn btn-sec !py-1 !px-2" :title="'Uren van '+(c.naam||c.email)+' downloaden ('+perLabel+')'"
+                            @click.stop="exportPersoon(c)" :disabled="!teamTotaal(c.id)">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/>
+                      </svg>
+                    </button>
+                  </td>
                 </tr>
               </template>
             </tbody>
@@ -550,13 +563,16 @@
                   <td class="px-2 py-2.5 text-center font-bold" x-text="teamCelAlles(k)?urenTekst(teamCelAlles(k)):'–'"></td>
                 </template>
                 <td class="px-3 py-2.5 text-right font-bold" x-text="urenTekst(teamWeekAlles)"></td>
+                <td x-show="!isJaar"></td>
                 <td></td>
               </tr>
             </tfoot>
           </table>
         </div>
         <p class="text-xs" style="color:#6B7060"
-           x-text="isMaand?'Klik op een medewerker om de regels te bekijken en de hele maand goed te keuren.':'Klik op een medewerker om de regels te bekijken en de week goed te keuren.'"></p>
+           x-text="isJaar?'Het jaar is bedoeld om af te lezen en te downloaden; goedkeuren doe je per week of per maand. Met het pijltje achter een regel download je die ene medewerker.'
+                   :(isMaand?'Klik op een medewerker om de regels te bekijken en de hele maand goed te keuren. Met het pijltje achter een regel download je die ene medewerker.'
+                            :'Klik op een medewerker om de regels te bekijken en de week goed te keuren. Met het pijltje achter een regel download je die ene medewerker.')"></p>
       </section>
 
       <!-- PLANNING -->
@@ -1061,9 +1077,10 @@
             <input class="inp mt-1" x-model="weekDetail.note" placeholder="Bijv. dinsdag graag nog aanvullen">
           </div>
           <div class="flex flex-wrap gap-2 mt-4">
-            <button class="btn btn-primary" x-show="weekDetail.rijen.length&&weekDetail.status!=='akkoord'&&!bekijkAls" @click="beoordeel('akkoord')">Goedkeuren</button>
-            <button class="btn btn-sec" x-show="weekDetail.rijen.length&&weekDetail.status==='ingediend'&&!bekijkAls" @click="beoordeel('afgekeurd')">Afkeuren</button>
-            <button class="btn btn-sec" x-show="(weekDetail.status==='akkoord'||weekDetail.status==='ingediend')&&!bekijkAls" @click="beoordeel('heropenen')">Heropenen</button>
+            <button class="btn btn-primary" x-show="!isJaar&&weekDetail.rijen.length&&weekDetail.status!=='akkoord'&&!bekijkAls" @click="beoordeel('akkoord')">Goedkeuren</button>
+            <button class="btn btn-sec" x-show="!isJaar&&weekDetail.rijen.length&&weekDetail.status==='ingediend'&&!bekijkAls" @click="beoordeel('afgekeurd')">Afkeuren</button>
+            <button class="btn btn-sec" x-show="!isJaar&&(weekDetail.status==='akkoord'||weekDetail.status==='ingediend')&&!bekijkAls" @click="beoordeel('heropenen')">Heropenen</button>
+            <button class="btn btn-sec" x-show="weekDetail.rijen.length" @click="exportPersoon({id:weekDetail.id,naam:weekDetail.naam})">Download CSV</button>
             <button class="btn btn-sec ml-auto" @click="weekDetail=null">Sluiten</button>
           </div>
         </div>
@@ -1223,7 +1240,7 @@ function admin(){return{
   today:new Date().toLocaleDateString('nl-NL',{weekday:'long',day:'numeric',month:'long',year:'numeric'}),
   vandaagIso:new Date().toLocaleDateString('sv-SE'),
   // Uren en planning draaien om één gekozen week (maandag als startpunt).
-  menuOpen:false, weekVan:'', periode:'week', maandVan:'', urenRijen:[], collegas:[], klussen:[], urenLoading:false,
+  menuOpen:false, weekVan:'', periode:'week', maandVan:'', jaarVan:'', urenRijen:[], collegas:[], klussen:[], urenLoading:false,
   uur:null, uurBusy:false, weekDetail:null,
   planShifts:[], planCollegasEcht:[], planKlanten:[], magPlannen:false, klus:null, klusBusy:false,
   teamUsers:[], teamInvites:[], wachtendAantal:0, medewerker:null, teamBusy:false, linkModal:null,
@@ -1277,6 +1294,7 @@ function admin(){return{
     this.kanPasskey = !this.bekijkAls && !!(window.Passkey && Passkey.beschikbaar());
     this.weekVan=this.maandagVan(this.vandaagIso);
     this.maandVan=this.maandStart(this.vandaagIso);
+    this.jaarVan=this.vandaagIso.slice(0,4)+'-01-01';
     // Begin op het scherm dat bij je rechten past.
     this.view = this.mag('leads') ? 'dashboard'
       : (this.mag('uren_eigen') ? 'uren' : (this.mag('planning_bekijken') ? 'planning' : 'account'));
@@ -1305,6 +1323,7 @@ function admin(){return{
 
   // Naar een ander scherm en de bijbehorende gegevens ophalen.
   ga(v){ this.view=v; this.menuOpen=false;
+    if(v==='uren' && this.isJaar) this.periode='maand';
     if(v==='leads')this.loadLeads(); else if(v==='quotes')this.loadQuotes();
     else if(v==='invoices')this.loadInvoices(); else if(v==='products')this.loadProducts();
     else if(v==='uren')this.loadUren(false); else if(v==='urenteam')this.loadUren(true);
@@ -1420,25 +1439,35 @@ function admin(){return{
   // Uren en planning draaien om één periode. Indienen, goedkeuren en de export
   // volgen allemaal het gekozen bereik; de planning blijft altijd per week.
   get isMaand(){ return this.periode==='maand' },
+  get isJaar(){ return this.periode==='jaar' },
   maandStart(iso){ return String(iso).slice(0,8)+'01' },
   maandEind(iso){ const d=new Date(iso+'T00:00:00'); return new Date(d.getFullYear(),d.getMonth()+1,0).toLocaleDateString('sv-SE') },
-  get perVan(){ return this.isMaand ? this.maandVan : this.weekVan },
-  get perTot(){ return this.isMaand ? this.maandEind(this.maandVan) : this.weekTot },
-  get perLabel(){ return this.isMaand
-    ? new Date(this.maandVan+'T00:00:00').toLocaleDateString('nl-NL',{month:'long',year:'numeric'})
-    : this.weekLabel },
-  get isDezePeriode(){ return this.isMaand
-    ? this.maandVan===this.maandStart(this.vandaagIso)
-    : this.weekVan===this.maandagVan(this.vandaagIso) },
+  get perVan(){ return this.isJaar ? this.jaarVan : (this.isMaand ? this.maandVan : this.weekVan) },
+  get perTot(){ return this.isJaar ? this.jaarVan.slice(0,4)+'-12-31' : (this.isMaand ? this.maandEind(this.maandVan) : this.weekTot) },
+  get perLabel(){ if(this.isJaar) return this.jaarVan.slice(0,4);
+    return this.isMaand
+      ? new Date(this.maandVan+'T00:00:00').toLocaleDateString('nl-NL',{month:'long',year:'numeric'})
+      : this.weekLabel },
+  get isDezePeriode(){ if(this.isJaar) return this.jaarVan.slice(0,4)===this.vandaagIso.slice(0,4);
+    return this.isMaand
+      ? this.maandVan===this.maandStart(this.vandaagIso)
+      : this.weekVan===this.maandagVan(this.vandaagIso) },
   zetPeriode(p){ if(this.periode===p) return; this.periode=p;
     if(p==='maand' && !this.maandVan) this.maandVan=this.maandStart(this.vandaagIso);
+    if(p==='jaar' && !this.jaarVan) this.jaarVan=this.vandaagIso.slice(0,4)+'-01-01';
     this.laadWeek(); },
-  perVerzet(n){ if(this.isMaand){ const d=new Date(this.maandVan+'T00:00:00'); d.setMonth(d.getMonth()+n);
+  perVerzet(n){ if(this.isJaar){ this.jaarVan=(+this.jaarVan.slice(0,4)+n)+'-01-01'; }
+    else if(this.isMaand){ const d=new Date(this.maandVan+'T00:00:00'); d.setMonth(d.getMonth()+n);
       this.maandVan=new Date(d.getFullYear(),d.getMonth(),1).toLocaleDateString('sv-SE'); }
     else this.weekVan=this.dagPlus(this.weekVan,7*n);
     this.laadWeek(); },
-  perNu(){ if(this.isMaand) this.maandVan=this.maandStart(this.vandaagIso); else this.weekVan=this.maandagVan(this.vandaagIso);
+  perNu(){ if(this.isJaar) this.jaarVan=this.vandaagIso.slice(0,4)+'-01-01';
+    else if(this.isMaand) this.maandVan=this.maandStart(this.vandaagIso);
+    else this.weekVan=this.maandagVan(this.vandaagIso);
     this.laadWeek(); },
+  // Downloadt de gekozen periode voor één medewerker — één bestand per persoon
+  // voor de boekhouding.
+  exportPersoon(c){ window.open('/api/hours?van='+this.perVan+'&tot='+this.perTot+'&user_id='+c.id+'&export=csv','_blank') },
   // De dagen van de gekozen periode, in dezelfde vorm als weekDagen.
   get perDagen(){ if(!this.isMaand) return this.weekDagen;
     const uit=[], eind=this.maandEind(this.maandVan); let iso=this.maandVan;
@@ -1452,7 +1481,13 @@ function admin(){return{
     return uit; },
   // Kolommen van het teamoverzicht: per dag in een week, per week in een maand —
   // anders zou een maand 31 kolommen breed worden.
-  get perKolommen(){ if(!this.isMaand) return this.weekDagen.map(d=>({key:d.iso,label:d.kort,van:d.iso,tot:d.iso}));
+  get perKolommen(){
+    // Jaar: twaalf maandkolommen, zodat de boekhouding per maand kan aflezen.
+    if(this.isJaar){ const jaar=this.jaarVan.slice(0,4); const uit=[];
+      for(let m=1;m<=12;m++){ const van=jaar+'-'+String(m).padStart(2,'0')+'-01';
+        uit.push({ key:'m'+van, label:new Date(van+'T00:00:00').toLocaleDateString('nl-NL',{month:'short'}), van, tot:this.maandEind(van) }); }
+      return uit; }
+    if(!this.isMaand) return this.weekDagen.map(d=>({key:d.iso,label:d.kort,van:d.iso,tot:d.iso}));
     const uit=[], eind=this.maandEind(this.maandVan); let van=this.maandVan;
     while(van<=eind){ const zondag=this.dagPlus(this.maandagVan(van),6); const tot=zondag<eind?zondag:eind;
       uit.push({ key:'w'+van, label:'wk '+this.isoWeekVan(van).split('-W')[1], van, tot });
