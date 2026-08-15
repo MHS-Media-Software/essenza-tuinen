@@ -69,6 +69,19 @@
     .klus.intern{background:#EDEFE6;border-left-color:#9aa08d}
     .dagkop{font-size:.72rem;font-weight:700;padding:.45rem .5rem;color:#4b5043;border-left:1px solid #E6E8DC;background:#F5F7EE}
     .urenrij{display:grid;grid-template-columns:6.5rem 1fr auto;gap:.5rem;align-items:center}
+    /* Zijbalk: op een telefoon schuift dezelfde balk van links naar binnen,
+       op een groot scherm staat hij gewoon vast naast de inhoud. */
+    .zijbalk{position:fixed;top:0;bottom:0;left:0;width:17rem;z-index:39;
+      transform:translateX(-100%);transition:transform .22s ease;box-shadow:0 0 40px rgba(15,16,9,.45)}
+    .zijbalk.open{transform:translateX(0)}
+    .zijdek{position:fixed;inset:0;z-index:38;background:rgba(15,16,9,.55)}
+    body.menu-open{overflow:hidden}
+    @media (min-width:768px){
+      .zijbalk{position:sticky;height:100vh;width:15rem;transform:none;box-shadow:none;z-index:auto}
+      .zijdek{display:none}
+      body.menu-open{overflow:auto}
+    }
+    body.meekijken .zijbalk{top:2.5rem}
     /* Week/maand-schakelaar boven de uren */
     .schakel{display:inline-flex;background:#fff;border:1px solid #E6E8DC;border-radius:.7rem;padding:2px}
     .schakel button{font-size:.8rem;font-weight:700;padding:.4rem .85rem;border-radius:.55rem;color:#6B7060;cursor:pointer}
@@ -90,7 +103,7 @@
     }
   </style>
 </head>
-<body x-data="admin()" x-init="init()" x-cloak :class="bekijkAls?'meekijken':''">
+<body x-data="admin()" x-init="init()" x-cloak :class="{'meekijken':bekijkAls,'menu-open':menuOpen}" @keydown.escape.window="menuOpen=false">
 
   <!-- Meekijken als medewerker -->
   <div x-show="bekijkAls" x-cloak class="meekijkbalk">
@@ -108,13 +121,20 @@
 
   <!-- APP -->
   <div x-show="authed" class="min-h-screen flex">
+    <!-- Donkere laag achter het uitgeschoven menu (alleen op een telefoon) -->
+    <div x-show="menuOpen" x-cloak class="zijdek" @click="menuOpen=false"></div>
+
     <!-- Sidebar -->
     <!-- Blijft aan het scherm plakken: op lange pagina's zakte het gebruikersblok
-         met de uitlogknop anders mee naar de onderkant van de héle pagina. -->
-    <aside class="zij w-60 shrink-0 border-r p-4 hidden md:flex flex-col sticky top-0 h-screen">
+         met de uitlogknop anders mee naar de onderkant van de héle pagina.
+         Op een telefoon is dit dezelfde balk, uitschuivend vanaf links. -->
+    <aside class="zij zijbalk shrink-0 border-r p-4 flex flex-col" :class="menuOpen&&'open'">
       <div class="flex items-center gap-2 mb-6 px-1">
         <img src="/favicon.png" class="w-9 h-9 rounded-xl" alt="">
-        <div><p class="font-h font-bold text-sm leading-tight text-white">Essenza Tuinen</p><p class="text-[11px]" style="color:rgba(255,255,255,.45)">Beheer</p></div>
+        <div class="flex-1 min-w-0"><p class="font-h font-bold text-sm leading-tight text-white">Essenza Tuinen</p><p class="text-[11px]" style="color:rgba(255,255,255,.45)">Beheer</p></div>
+        <button class="md:hidden p-1 rounded-lg" style="color:rgba(255,255,255,.6)" @click="menuOpen=false" aria-label="Menu sluiten">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+        </button>
       </div>
       <nav class="space-y-1 flex-1 overflow-y-auto">
         <div class="navi" x-show="mag('leads')" :class="view==='dashboard'&&'active'" @click="ga('dashboard')">
@@ -173,26 +193,17 @@
       </div>
     </aside>
 
-    <!-- Mobile topbar -->
-    <div class="zij mobbar md:hidden fixed top-0 inset-x-0 border-b z-20 flex items-center gap-2 px-3 py-2">
-      <img src="/favicon.png" class="w-8 h-8 rounded-lg">
-      <select class="inp !py-1.5 flex-1" x-model="view" @change="ga(view)">
-        <template x-if="mag('leads')"><option value="dashboard">Dashboard</option></template>
-        <template x-if="mag('uren_eigen')"><option value="uren">Mijn uren</option></template>
-        <template x-if="mag('uren_alle')"><option value="urenteam">Urenoverzicht</option></template>
-        <template x-if="mag('planning_bekijken')"><option value="planning">Planning</option></template>
-        <template x-if="mag('leads')"><option value="leads">Aanvragen</option></template>
-        <template x-if="mag('offertes')"><option value="quotes">Offertes</option></template>
-        <template x-if="mag('facturen')"><option value="invoices">Facturen</option></template>
-        <template x-if="mag('producten')"><option value="products">Producten &amp; prijzen</option></template>
-        <template x-if="mag('team')"><option value="team">Medewerkers</option></template>
-        <template x-if="mag('instellingen')"><option value="settings">Instellingen</option></template>
-        <option value="account">Mijn account</option>
-      </select>
-      <button class="btn btn-zij !px-3" @click="logout()">Uit</button>
+    <!-- Balk bovenin op een telefoon: hamburger + waar je bent -->
+    <div class="zij mobbar md:hidden fixed top-0 inset-x-0 border-b z-20 flex items-center gap-3 px-3 py-2.5">
+      <button class="p-1.5 -ml-1 rounded-lg text-white" @click="menuOpen=true" aria-label="Menu openen">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+      </button>
+      <img src="/favicon.png" class="w-8 h-8 rounded-lg shrink-0">
+      <span class="font-h font-bold text-sm text-white truncate" x-text="viewTitel"></span>
+      <span x-show="wachtendAantal+teIndienen" class="zijbadge let ml-auto shrink-0" x-text="wachtendAantal+teIndienen"></span>
     </div>
 
-    <main class="flex-1 min-w-0 p-4 md:p-8 mt-12 md:mt-0 max-w-6xl">
+    <main class="flex-1 min-w-0 p-4 md:p-8 mt-14 md:mt-0 max-w-6xl">
 
       <!-- DASHBOARD -->
       <section x-show="view==='dashboard'">
@@ -200,7 +211,7 @@
         <p class="text-sm mb-6" style="color:#6B7060" x-text="today"></p>
         <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
           <template x-for="k in kpis" :key="k.l">
-            <div class="card p-4"><p class="font-h text-2xl font-bold" :style="'color:'+k.c" x-text="k.v"></p><p class="text-xs mt-0.5" style="color:#6B7060" x-text="k.l"></p></div>
+            <div class="card p-4"><p class="font-h text-lg sm:text-2xl font-bold" :style="'color:'+k.c" x-text="k.v"></p><p class="text-xs mt-0.5" style="color:#6B7060" x-text="k.l"></p></div>
           </template>
         </div>
         <div class="card p-5">
@@ -1198,7 +1209,7 @@ function admin(){return{
   today:new Date().toLocaleDateString('nl-NL',{weekday:'long',day:'numeric',month:'long',year:'numeric'}),
   vandaagIso:new Date().toLocaleDateString('sv-SE'),
   // Uren en planning draaien om één gekozen week (maandag als startpunt).
-  weekVan:'', periode:'week', maandVan:'', urenRijen:[], collegas:[], klussen:[], urenLoading:false,
+  menuOpen:false, weekVan:'', periode:'week', maandVan:'', urenRijen:[], collegas:[], klussen:[], urenLoading:false,
   uur:null, uurBusy:false, weekDetail:null,
   planShifts:[], planCollegasEcht:[], planKlanten:[], magPlannen:false, klus:null, klusBusy:false,
   teamUsers:[], teamInvites:[], wachtendAantal:0, medewerker:null, teamBusy:false, linkModal:null,
@@ -1268,13 +1279,18 @@ function admin(){return{
   async logout(){ await this.api('/api/session',{method:'DELETE'}); location.href='/inloggen'; },
 
   mag(p){ return (this.ik.rechten||[]).includes(p) },
+  // Titel in de mobiele balk, zodat je ziet waar je bent zonder het menu te openen.
+  get viewTitel(){ return { dashboard:'Dashboard', uren:'Mijn uren', urenteam:'Urenoverzicht',
+    planning:'Planning', leads:'Aanvragen', quotes:'Offertes', invoices:'Facturen',
+    products:'Producten & prijzen', team:'Medewerkers', settings:'Instellingen',
+    account:'Mijn account' }[this.view] || 'Beheer' },
   get initialen(){ return this.initialenVan(this.ik.naam||this.ik.email) },
   initialenVan(n){ return String(n||'').trim().split(/[\s@.]+/).filter(Boolean).slice(0,2).map(w=>w[0].toUpperCase()).join('')||'?' },
   get permGroepen(){ const g=[]; (this.perms||[]).forEach(p=>{ let v=g.find(x=>x.naam===p.groep);
     if(!v){ v={naam:p.groep,items:[]}; g.push(v) } v.items.push(p) }); return g; },
 
   // Naar een ander scherm en de bijbehorende gegevens ophalen.
-  ga(v){ this.view=v;
+  ga(v){ this.view=v; this.menuOpen=false;
     if(v==='leads')this.loadLeads(); else if(v==='quotes')this.loadQuotes();
     else if(v==='invoices')this.loadInvoices(); else if(v==='products')this.loadProducts();
     else if(v==='uren')this.loadUren(false); else if(v==='urenteam')this.loadUren(true);
