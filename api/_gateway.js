@@ -1,7 +1,7 @@
 // Centrale MAIHS-gateway: één plek voor de Google-OAuth-client en de uitgaande
 // mail van de hele vloot, zodat een rotatie niet langs elke klantsite hoeft.
 //
-// Deze laag is bewust INERT zolang MAIHS_AI_URL/MAIHS_AI_KEY niet gezet zijn:
+// Deze laag is bewust INERT zolang de gateway-envs niet gezet zijn:
 // staat het eigen Google-clientpaar in de env, dan gaat alles precies zoals het
 // altijd ging. De gateway is de terugval, niet de nieuwe hoofdweg.
 //
@@ -13,20 +13,31 @@ import crypto from 'node:crypto';
 
 const UA = 'MAIHS-Gateway-Client/1.0';
 
-const maihsUrl = () => (process.env.MAIHS_AI_URL || '').trim();
-const maihsKey = () => (process.env.MAIHS_AI_KEY || '').trim();
+// De envs heetten MAIHS_AI_* toen de gateway alleen AI deed. Datzelfde token
+// bedient inmiddels ook SE Ranking, Google-OAuth, Ads en mail, dus de vloot gaat
+// over op MHS_GATEWAY_*. Beide namen worden gelezen zolang die omzetting loopt;
+// de oude mag pas weg als elke site de nieuwe heeft.
+//
+// LET OP het vormverschil — daar zit de valkuil: de OUDE env is een volledig pad
+// ('https://host/api/ai-gateway/messages'), de NIEUWE een kale origin
+// ('https://host'). Daarom leidt alles hieronder de origin af en plakt het zijn
+// eigen pad erachter; een naief 'nieuw or oud' zou met de nieuwe env een dubbel
+// pad opleveren.
+const gatewayUrl = () => (process.env.MHS_GATEWAY_URL || process.env.MAIHS_AI_URL || '').trim();
+const gatewayKey = () => (process.env.MHS_GATEWAY_KEY || process.env.MAIHS_AI_KEY || '').trim();
 
-// De MAIHS-host, afgeleid uit de AI-gateway-URL — scheelt een env-variabele per
-// site. Alle centrale gateways (config, Google-OAuth, mail) hangen onder
-// diezelfde host en het token dat we voor de AI-gateway toch al hebben geeft er
-// toegang toe.
-function maihsBasis() {
-  const m = /^(https?:\/\/[^/]+)/.exec(maihsUrl());
+// De MHS-host als kale origin. Knipt de origin uit beide vormen, dus een volledig
+// pad en een kale host (met of zonder afsluitende slash) leveren exact hetzelfde
+// op — dat scheelt een env-variabele per site. Alle centrale gateways (config,
+// Google-OAuth, mail) hangen onder diezelfde host en het token dat we toch al
+// hebben geeft er toegang toe.
+function gatewayOrigin() {
+  const m = /^(https?:\/\/[^/]+)/.exec(gatewayUrl());
   return m ? m[1] : '';
 }
 
 function gatewayBeschikbaar() {
-  return !!(maihsBasis() && maihsKey());
+  return !!(gatewayOrigin() && gatewayKey());
 }
 
 function eigenGoogleClient() {
@@ -54,12 +65,12 @@ async function gatewayConfig() {
   if (!gatewayBeschikbaar()) return {};
   // De memo hangt aan host + token: wisselt er één, dan is de oude waarde meteen
   // ongeldig. Het token zelf bewaren we niet, een korte hash is genoeg.
-  const sleutel = maihsBasis() + '|' + crypto.createHash('sha256').update(maihsKey()).digest('hex').slice(0, 16);
+  const sleutel = gatewayOrigin() + '|' + crypto.createHash('sha256').update(gatewayKey()).digest('hex').slice(0, 16);
   const laatste = memo.sleutel === sleutel && memo.data ? memo.data : null;
   if (laatste && Date.now() - memo.t < CONFIG_TTL_MS) return laatste;
   try {
-    const r = await fetch(maihsBasis() + '/api/gateway/config', {
-      headers: { Authorization: 'Bearer ' + maihsKey(), 'User-Agent': UA },
+    const r = await fetch(gatewayOrigin() + '/api/gateway/config', {
+      headers: { Authorization: 'Bearer ' + gatewayKey(), 'User-Agent': UA },
       signal: metTimeout(10000),
     });
     if (!r.ok) throw new Error('status ' + r.status);
@@ -107,10 +118,10 @@ async function googleTokenExchange(velden) {
   if (!gatewayBeschikbaar()) {
     throw new Error('Google OAuth niet geconfigureerd: geen eigen client en geen gateway');
   }
-  return fetch(maihsBasis() + '/api/gateway/google-oauth/token', {
+  return fetch(gatewayOrigin() + '/api/gateway/google-oauth/token', {
     method: 'POST',
     headers: {
-      Authorization: 'Bearer ' + maihsKey(),
+      Authorization: 'Bearer ' + gatewayKey(),
       'Content-Type': 'application/json',
       'User-Agent': UA,
     },
@@ -159,10 +170,10 @@ async function mailViaGateway({ to, subject, html, text, fromName, replyTo, cc, 
   if (cc) lading.cc = cc;
   if (bcc) lading.bcc = bcc;
   try {
-    const r = await fetch(maihsBasis() + '/api/gateway/mail', {
+    const r = await fetch(gatewayOrigin() + '/api/gateway/mail', {
       method: 'POST',
       headers: {
-        Authorization: 'Bearer ' + maihsKey(),
+        Authorization: 'Bearer ' + gatewayKey(),
         'Content-Type': 'application/json',
         'User-Agent': UA,
       },
@@ -180,7 +191,7 @@ async function mailViaGateway({ to, subject, html, text, fromName, replyTo, cc, 
 }
 
 export {
-  maihsBasis, gatewayBeschikbaar, gatewayConfig,
+  gatewayOrigin, gatewayBeschikbaar, gatewayConfig,
   eigenGoogleClient, googleOauthBeschikbaar, googleClientId, googleTokenExchange,
   CENTRALE_MAILBOXEN, isCentraleMailbox, eigenMailserver, mailViaGateway,
 };
