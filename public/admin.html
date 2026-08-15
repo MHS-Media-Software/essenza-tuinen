@@ -620,7 +620,7 @@
       <section x-show="view==='team'">
         <div class="flex flex-wrap items-center gap-3 mb-4">
           <h1 class="font-h text-2xl font-bold flex-1">Medewerkers</h1>
-          <button class="btn btn-primary" @click="nieuweUitnodiging()">+ Aanmeldlink maken</button>
+          <button class="btn btn-primary w-full sm:w-auto justify-center" @click="nieuweUitnodiging()">+ Aanmeldlink maken</button>
         </div>
 
         <!-- Aanmeldingen die nog goedgekeurd moeten worden -->
@@ -629,19 +629,23 @@
           <p class="text-xs mb-3" style="color:#6B7060">Deze mensen hebben zich via een aanmeldlink aangemeld. Ze kunnen pas inloggen als jij ze goedkeurt.</p>
           <div class="divide-y" style="border-color:#E6E8DC">
             <template x-for="u in wachtenden" :key="u.id">
-              <div class="flex flex-wrap items-center gap-3 py-2.5">
+              <div class="flex flex-wrap items-center gap-x-3 gap-y-2.5 py-2.5">
                 <span class="w-9 h-9 rounded-full grid place-items-center font-bold text-xs shrink-0" style="background:#FCF3D9;color:#8a6d0b" x-text="initialenVan(u.naam||u.email)"></span>
                 <div class="min-w-0 flex-1">
                   <p class="font-semibold text-sm truncate" x-text="u.naam||u.email"></p>
-                  <p class="text-xs truncate" style="color:#6B7060">
+                  <p class="text-xs break-words" style="color:#6B7060">
                     <span x-text="u.email"></span><span x-show="u.telefoon" x-text="' · '+u.telefoon"></span>
                     <span x-text="' · aangemeld '+fmt(u.created)"></span>
                   </p>
                 </div>
-                <span class="pill capitalize" style="background:#F5F7EE;color:#4b5043" x-text="u.rol"></span>
-                <button class="btn btn-sec !py-1.5 !text-xs" @click="openMedewerker(u)">Rechten bekijken</button>
-                <button class="btn btn-primary !py-1.5 !text-xs" @click="beoordeelAanmelding(u,'goedkeuren')">Goedkeuren</button>
-                <button class="btn btn-danger !py-1.5 !text-xs" @click="beoordeelAanmelding(u,'afkeuren')">Afkeuren</button>
+                <!-- Op een telefoon zakt dit blok als geheel naar de volgende regel,
+                     zodat naam en e-mailadres de volle breedte houden. -->
+                <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+                  <span class="pill capitalize" style="background:#F5F7EE;color:#4b5043" x-text="u.rol"></span>
+                  <button class="btn btn-sec !py-1.5 !text-xs" @click="openMedewerker(u)">Rechten bekijken</button>
+                  <button class="btn btn-primary !py-1.5 !text-xs" @click="beoordeelAanmelding(u,'goedkeuren')">Goedkeuren</button>
+                  <button class="btn btn-danger !py-1.5 !text-xs" @click="beoordeelAanmelding(u,'afkeuren')">Afkeuren</button>
+                </div>
               </div>
             </template>
           </div>
@@ -649,7 +653,7 @@
 
         <div class="card divide-y mb-4" style="border-color:#E6E8DC">
           <template x-for="u in eigenPersoneel" :key="u.id">
-            <div class="p-4 flex flex-wrap items-center gap-3">
+            <div class="p-4 flex flex-wrap items-center gap-x-3 gap-y-2.5">
               <span class="w-9 h-9 rounded-full grid place-items-center font-bold text-xs shrink-0"
                     :style="u.actief?'background:#E4F2E8;color:#087A37':'background:#EDEFE6;color:#9aa08d'" x-text="initialenVan(u.naam||u.email)"></span>
               <div class="min-w-0 flex-1">
@@ -659,11 +663,17 @@
                 </p>
                 <p class="text-xs truncate" style="color:#6B7060" x-text="u.email"></p>
               </div>
-              <span class="pill capitalize" style="background:#F5F7EE;color:#4b5043" x-text="u.rol"></span>
-              <span class="pill zin" :style="u.actief?'background:#E4F2E8;color:#087A37':'background:#EDEFE6;color:#6B7060'" x-text="u.actief?'Actief':'Non-actief'"></span>
-              <span class="text-xs hidden sm:block w-28" style="color:#9aa08d" x-text="u.last_login?('laatst: '+fmt(u.last_login)):'nog niet ingelogd'"></span>
-              <button class="btn btn-sec !py-1.5" x-show="u.actief && u.id!==ik.id" @click="bekijkAlsMedewerker(u)">Bekijk als</button>
-              <button class="btn btn-sec !py-1.5" @click="openMedewerker(u)">Rechten</button>
+              <span class="text-xs hidden lg:block w-28 shrink-0" style="color:#9aa08d" x-text="u.last_login?('laatst: '+fmt(u.last_login)):'nog niet ingelogd'"></span>
+              <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+                <span class="pill capitalize" style="background:#F5F7EE;color:#4b5043" x-text="u.rol"></span>
+                <span class="pill zin" :style="u.actief?'background:#E4F2E8;color:#087A37':'background:#EDEFE6;color:#6B7060'" x-text="u.actief?'Actief':'Non-actief'"></span>
+                <!-- Op een telefoon delen de twee knoppen samen één regel; vanaf sm
+                     lost dit omhulsel op (contents) en staat alles weer op één rij. -->
+                <span class="flex gap-2 w-full sm:contents">
+                  <button class="btn btn-sec !py-1.5 flex-1 sm:flex-none justify-center sm:ml-1" x-show="u.actief && u.id!==ik.id" @click="bekijkAlsMedewerker(u)">Bekijk als</button>
+                  <button class="btn btn-sec !py-1.5 flex-1 sm:flex-none justify-center" @click="openMedewerker(u)">Rechten</button>
+                </span>
+              </div>
             </div>
           </template>
         </div>
@@ -679,7 +689,7 @@
                              : 'Dit zijn de accounts van je websitebouwer. Ze worden door MHS Media zelf beheerd en tellen niet mee als personeel.'"></p>
           <div class="divide-y" style="border-color:#E6E8DC">
             <template x-for="u in mhsAccounts" :key="'mhs'+u.id">
-              <div class="flex flex-wrap items-center gap-3 py-2.5">
+              <div class="flex flex-wrap items-center gap-x-3 gap-y-2.5 py-2.5">
                 <span class="w-9 h-9 rounded-full grid place-items-center font-bold text-xs shrink-0" style="background:#E8EEF8;color:#2c5aa0" x-text="initialenVan(u.naam||u.email)"></span>
                 <div class="min-w-0 flex-1">
                   <p class="font-semibold text-sm truncate">
@@ -688,9 +698,11 @@
                   </p>
                   <p class="text-xs truncate" style="color:#6B7060" x-text="u.email"></p>
                 </div>
-                <span class="text-xs hidden sm:block w-28" style="color:#9aa08d" x-text="u.last_login?('laatst: '+fmt(u.last_login)):'nog niet ingelogd'"></span>
-                <button class="btn btn-sec !py-1.5" x-show="benTeam && u.actief && u.id!==ik.id" @click="bekijkAlsMedewerker(u)">Bekijk als</button>
-                <button class="btn btn-sec !py-1.5" x-show="benTeam" @click="openMedewerker(u)">Rechten</button>
+                <span class="text-xs hidden lg:block w-28 shrink-0" style="color:#9aa08d" x-text="u.last_login?('laatst: '+fmt(u.last_login)):'nog niet ingelogd'"></span>
+                <div class="flex gap-2 w-full sm:w-auto" x-show="benTeam">
+                  <button class="btn btn-sec !py-1.5 flex-1 sm:flex-none justify-center" x-show="u.actief && u.id!==ik.id" @click="bekijkAlsMedewerker(u)">Bekijk als</button>
+                  <button class="btn btn-sec !py-1.5 flex-1 sm:flex-none justify-center" @click="openMedewerker(u)">Rechten</button>
+                </div>
               </div>
             </template>
           </div>
@@ -729,14 +741,16 @@
           <p class="text-xs mb-3" style="color:#6B7060">Zolang een link geldig is kan iedereen die hem heeft een account aanmaken. Trek hem in zodra je team compleet is.</p>
           <div class="divide-y" style="border-color:#E6E8DC">
             <template x-for="i in teamInvites" :key="i.id">
-              <div class="flex flex-wrap items-center gap-3 py-2.5 text-sm">
+              <div class="flex flex-wrap items-center gap-x-3 gap-y-2.5 py-2.5 text-sm">
                 <span class="flex-1 min-w-0">
                   <span class="font-semibold block" x-text="i.soort==='reset' ? ('Wachtwoordherstel · '+(i.naam||i.email)) : ('Aanmeldlink · rol '+(i.rol||'medewerker'))"></span>
                   <span class="text-xs block truncate" style="color:#6B7060" x-text="'geldig t/m '+fmtDate(i.exp)"></span>
                 </span>
-                <button class="btn btn-sec !py-1.5 !text-xs" @click="kopieer(i.link)">Link kopi&euml;ren</button>
-                <button class="btn btn-sec !py-1.5 !text-xs" x-show="i.soort!=='reset'" @click="verlengLink(i)">Week verlengen</button>
-                <button class="btn btn-danger !py-1.5 !text-xs" @click="trekIn(i)">Intrekken</button>
+                <div class="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+                  <button class="btn btn-sec !py-1.5 !text-xs" @click="kopieer(i.link)">Link kopi&euml;ren</button>
+                  <button class="btn btn-sec !py-1.5 !text-xs" x-show="i.soort!=='reset'" @click="verlengLink(i)">Week verlengen</button>
+                  <button class="btn btn-danger !py-1.5 !text-xs" @click="trekIn(i)">Intrekken</button>
+                </div>
               </div>
             </template>
           </div>
