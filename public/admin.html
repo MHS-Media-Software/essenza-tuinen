@@ -635,7 +635,9 @@
           </div>
           <button class="btn btn-primary" x-show="magPlannen && !bekijkAls" @click="nieuweKlus(vandaagIso)">+ Klus inplannen</button>
         </div>
-        <p class="text-sm mb-4" style="color:#6B7060" x-text="weekLabel"></p>
+        <p class="text-sm mb-1" style="color:#6B7060" x-text="weekLabel"></p>
+        <p x-show="!planAlles" class="text-xs mb-4" style="color:#6B7060">Je ziet de klussen waarop jij staat, met de collega's die diezelfde dag met je meegaan.</p>
+        <div x-show="planAlles" class="mb-4"></div>
 
         <!-- Weekrooster (desktop) -->
         <div class="card overflow-x-auto hidden md:block">
@@ -1509,7 +1511,7 @@ function admin(){return{
   // Uren en planning draaien om één gekozen week (maandag als startpunt).
   menuOpen:false, weekVan:'', periode:'week', maandVan:'', jaarVan:'', urenRijen:[], collegas:[], klussen:[], urenLoading:false,
   uur:null, uurBusy:false, weekDetail:null,
-  planShifts:[], planCollegasEcht:[], planKlanten:[], magPlannen:false, klus:null, klusInfo:null, klusBusy:false,
+  planShifts:[], planCollegasEcht:[], planKlanten:[], magPlannen:false, planAlles:true, klus:null, klusInfo:null, klusBusy:false,
   teamUsers:[], teamInvites:[], wachtendAantal:0, medewerker:null, teamBusy:false, linkModal:null,
   pwOud:'', pwNieuw:'', toonPw:{oud:false,nieuw:false}, ikBasis:{naam:'',telefoon:''}, instBasis:'', passkeys:[], pkBusy:false, kanPasskey:false,
   toasts:[], toastId:0, vraag:null,
@@ -1895,7 +1897,8 @@ function admin(){return{
   // ══ Planning ═══════════════════════════════════════════════════════════════
   async loadPlanning(){ const d=await this.api('/api/planning?van='+this.weekVan+'&tot='+this.weekTot);
     if(!d.ok) return this.mis(d.error||'Planning kon niet geladen worden.');
-    this.planShifts=d.shifts||[]; this.planCollegasEcht=d.collegas||[]; this.planKlanten=d.klanten||[]; this.magPlannen=!!d.magBeheren && !this.bekijkAls; },
+    this.planShifts=d.shifts||[]; this.planCollegasEcht=d.collegas||[]; this.planKlanten=d.klanten||[];
+    this.magPlannen=!!d.magBeheren && !this.bekijkAls; this.planAlles=!!d.magAlles; },
   get planCollegas(){ const l=(this.planCollegasEcht||[]).slice();
     if(this.planShifts.some(s=>!s.user_id)) l.push({id:0,naam:''}); return l; },
   // Alleen actieve medewerkers kun je nog nieuw inplannen.

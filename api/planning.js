@@ -63,29 +63,45 @@ export default async function handler(req, res) {
       const qy = req.query || {};
       const van = String(qy.van || '').slice(0, 10) || db.weekStart(new Date().toISOString());
       const tot = String(qy.tot || '').slice(0, 10) || new Date(new Date(`${van}T00:00:00Z`).getTime() + 6 * 864e5).toISOString().slice(0, 10);
+      // Wie de planning maakt of het recht 'planning_alle' heeft ziet iedereen.
+      // De rest ziet alleen de klussen waarop hij zelf staat — plus de collega's
+      // die diezelfde dag op diezelfde klus staan, zodat je wel weet met wie je
+      // op pad gaat.
+      const magAlles = magBeheren || ik.rechten.includes('planning_alle');
       const args = [van, tot];
       let where = 's.datum BETWEEN ? AND ?';
-      if (qy.user_id && qy.user_id !== 'alle') { where += ' AND s.user_id=?'; args.push(+qy.user_id); }
+      if (!magAlles) {
+        where += ` AND (s.user_id=? OR EXISTS (SELECT 1 FROM shifts m
+          WHERE m.user_id=? AND m.groep IS NOT NULL AND m.groep=s.groep AND m.datum=s.datum))`;
+        args.push(ik.id, ik.id);
+      } else if (qy.user_id && qy.user_id !== 'alle') { where += ' AND s.user_id=?'; args.push(+qy.user_id); }
 
       const shifts = await db.q(
         `SELECT s.*, u.naam AS medewerker, l.naam AS lead_naam, l.plaats AS lead_plaats, l.telefoon AS lead_telefoon
          FROM shifts s LEFT JOIN users u ON u.id=s.user_id LEFT JOIN leads l ON l.id=s.lead_id
          WHERE ${where} ORDER BY s.datum, s.van, s.id`, args);
+
       // Actieve medewerkers plus iedereen die in deze week nog ingepland staat,
       // zodat werk van een uit dienst getreden collega niet uit beeld verdwijnt.
       // MHS-accounts (via='sso') zijn geen personeel en staan hier niet tussen,
       // tenzij er voor deze week toch een klus op hun naam staat.
-      const collegas = await db.q(`SELECT id,naam,actief FROM users
-        WHERE (actief=1 AND COALESCE(via,'lokaal')<>'sso')
-           OR id IN (SELECT DISTINCT user_id FROM shifts WHERE datum BETWEEN ? AND ?)
-        ORDER BY actief DESC, naam COLLATE NOCASE`, [van, tot]);
+      // Zie je alleen je eigen planning, dan bevat de lijst alleen de mensen die
+      // in de zichtbare klussen voorkomen.
+      const collegas = magAlles
+        ? await db.q(`SELECT id,naam,actief FROM users
+            WHERE (actief=1 AND COALESCE(via,'lokaal')<>'sso')
+               OR id IN (SELECT DISTINCT user_id FROM shifts WHERE datum BETWEEN ? AND ?)
+            ORDER BY actief DESC, naam COLLATE NOCASE`, [van, tot])
+        : [{ id: ik.id, naam: ik.naam, actief: 1 }].concat(
+            [...new Set(shifts.map(s => s.user_id).filter(u => u && u !== ik.id))]
+              .map(uid => { const s = shifts.find(x => x.user_id === uid); return { id: uid, naam: s.medewerker, actief: 1 }; }));
       // Klantenlijst alleen voor wie de planning maakt (en dus een klus koppelt).
       const klanten = magBeheren
         ? await db.q("SELECT id,naam,plaats FROM leads WHERE status NOT IN ('verloren') ORDER BY id DESC LIMIT 200")
         : [];
       return res.status(200).json({
         ok: true, van, tot, shifts, collegas, klanten, soorten: SOORTEN,
-        ik: { id: ik.id, naam: ik.naam }, magBeheren,
+        ik: { id: ik.id, naam: ik.naam }, magBeheren, magAlles,
       });
     }
 

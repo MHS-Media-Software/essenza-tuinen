@@ -157,7 +157,8 @@ async function setSetting(key, value) {
 const PERMS = [
   { key: 'uren_eigen', label: 'Eigen uren invullen', groep: 'Uren' },
   { key: 'uren_alle', label: 'Uren van iedereen zien en goedkeuren', groep: 'Uren' },
-  { key: 'planning_bekijken', label: 'Planning bekijken', groep: 'Planning' },
+  { key: 'planning_bekijken', label: 'Eigen planning bekijken', groep: 'Planning' },
+  { key: 'planning_alle', label: 'Planning van het hele team zien', groep: 'Planning' },
   { key: 'planning_beheren', label: 'Planning maken en wijzigen', groep: 'Planning' },
   { key: 'leads', label: 'Aanvragen', groep: 'Administratie' },
   { key: 'offertes', label: 'Offertes', groep: 'Administratie' },
@@ -169,7 +170,7 @@ const PERMS = [
 const PERM_KEYS = PERMS.map(p => p.key);
 const ROLLEN = {
   beheerder: PERM_KEYS.slice(),
-  planner: ['uren_eigen', 'uren_alle', 'planning_bekijken', 'planning_beheren', 'leads'],
+  planner: ['uren_eigen', 'uren_alle', 'planning_bekijken', 'planning_alle', 'planning_beheren', 'leads'],
   medewerker: ['uren_eigen', 'planning_bekijken'],
 };
 function cleanPerms(list, rol) {
