@@ -27,6 +27,20 @@ function teamUit(b) {
   return ids.length ? ids : [null];
 }
 
+// Een klus kan meer dagen duren: dan komt er per dag een setje regels, allemaal
+// in dezelfde groep. Zo kun je later op één dag iemand extra aanvinken.
+function dagenUit(b) {
+  const start = String(b.datum || '').slice(0, 10);
+  let n = Math.max(1, Math.min(31, Math.round(+b.dagen || 1)));
+  if (b.tot_datum) {
+    const eind = String(b.tot_datum).slice(0, 10);
+    const dagen = Math.round((new Date(`${eind}T00:00:00Z`) - new Date(`${start}T00:00:00Z`)) / 864e5) + 1;
+    if (dagen > 0) n = Math.min(31, dagen);
+  }
+  return Array.from({ length: n }, (_, i) =>
+    new Date(new Date(`${start}T00:00:00Z`).getTime() + i * 864e5).toISOString().slice(0, 10));
+}
+
 async function voegToe(b, userId, groep, doorId) {
   const now = new Date().toISOString();
   await db.exec(`INSERT INTO shifts(datum,van,tot,user_id,titel,lead_id,klant,adres,notitie,soort,status,groep,extern,created_by,created,updated)
@@ -82,8 +96,9 @@ export default async function handler(req, res) {
       const fout = valideer(b);
       if (fout) return res.status(400).json({ ok: false, error: fout });
       const groep = db.randomToken().slice(0, 20);
-      for (const uid of teamUit(b)) await voegToe(b, uid, groep, ik.id);
-      return res.status(200).json({ ok: true, groep });
+      const dagen = dagenUit(b);
+      for (const datum of dagen) for (const uid of teamUit(b)) await voegToe({ ...b, datum }, uid, groep, ik.id);
+      return res.status(200).json({ ok: true, groep, dagen: dagen.length });
     }
 
     if (req.method === 'PATCH') {
@@ -97,10 +112,15 @@ export default async function handler(req, res) {
       // Klussen van vóór de teamfunctie hebben nog geen groep; die krijgen er nu een.
       let groep = r.groep;
       if (!groep) { groep = db.randomToken().slice(0, 20); await db.exec('UPDATE shifts SET groep=? WHERE id=?', [groep, r.id]); }
-      const regels = await db.q('SELECT * FROM shifts WHERE groep=?', [groep]);
+      // Wie er meegaan en de tijden gelden voor de dag die je open hebt staan;
+      // klant, adres en notitie gelden voor de hele klus. Anders zou het
+      // verplaatsen van één dag de rest van een meerdaagse klus meeslepen.
+      const dag = r.datum;
+      const regels = await db.q('SELECT * FROM shifts WHERE groep=? AND datum=?', [groep, dag]);
+      const now = new Date().toISOString();
 
       // Wie moet erbij, wie eraf? Uitvinken in het scherm haalt iemand van de klus.
-      // Bij een lege bezetting blijft er bewust één regel over: anders zou de klus
+      // Bij een lege bezetting blijft er bewust één regel over: anders zou de dag
       // zelf uit de planning verdwijnen.
       const ids = (b.user_ids !== undefined ? teamUit(b) : regels.map(x => x.user_id)).filter(Boolean);
       const leegmaken = !ids.length;
@@ -111,28 +131,34 @@ export default async function handler(req, res) {
       }
       if (!leegmaken) {
         const heeft = blijft.map(x => x.user_id);
-        for (const uid of ids.filter(u => !heeft.includes(u))) await voegToe(samen, uid, groep, ik.id);
+        for (const uid of ids.filter(u => !heeft.includes(u))) await voegToe({ ...samen, datum: dag }, uid, groep, ik.id);
       }
 
-      await db.exec(`UPDATE shifts SET datum=?, van=?, tot=?, titel=?, lead_id=?, klant=?, adres=?, notitie=?, soort=?, status=?, extern=?, updated=?
-        WHERE groep=?`,
+      // Deze dag: datum, tijden, bezetting en de losse namen.
+      await db.exec(`UPDATE shifts SET datum=?, van=?, tot=?, extern=?, updated=? WHERE groep=? AND datum=?`,
         [String(samen.datum).slice(0, 10), String(samen.van || '').slice(0, 5) || null, String(samen.tot || '').slice(0, 5) || null,
-          String(samen.titel || '').slice(0, 160) || null, samen.lead_id ? +samen.lead_id : null,
+          String(samen.extern || '').slice(0, 200) || null, now, groep, dag]);
+      if (leegmaken) await db.exec('UPDATE shifts SET user_id=NULL WHERE groep=? AND datum=?', [groep, String(samen.datum).slice(0, 10)]);
+
+      // De hele klus: klant, omschrijving, adres en notitie.
+      await db.exec(`UPDATE shifts SET titel=?, lead_id=?, klant=?, adres=?, notitie=?, soort=?, status=?, updated=?
+        WHERE groep=?`,
+        [String(samen.titel || '').slice(0, 160) || null, samen.lead_id ? +samen.lead_id : null,
           String(samen.klant || '').slice(0, 160) || null, String(samen.adres || '').slice(0, 200) || null,
           String(samen.notitie || '').slice(0, 600) || null, SOORTEN.includes(samen.soort) ? samen.soort : 'klus',
-          ['gepland', 'bezig', 'klaar'].includes(samen.status) ? samen.status : 'gepland',
-          String(samen.extern || '').slice(0, 200) || null, new Date().toISOString(), groep]);
-      // Bij een lege bezetting moet de overgebleven regel ook echt leeg zijn.
-      if (leegmaken) await db.exec('UPDATE shifts SET user_id=NULL WHERE groep=?', [groep]);
+          ['gepland', 'bezig', 'klaar'].includes(samen.status) ? samen.status : 'gepland', now, groep]);
       return res.status(200).json({ ok: true, groep });
     }
 
-    // Verwijderen gaat altijd over de hele klus, dus over alle mensen erop.
+    // Verwijderen gaat over alle mensen op de klus: standaard alleen deze dag,
+    // met {alles:true} de hele (meerdaagse) klus.
     if (req.method === 'DELETE') {
       const b = await db.readBody(req);
       const r = (await db.q('SELECT * FROM shifts WHERE id=?', [+b.id || 0]))[0];
       if (!r) return res.status(200).json({ ok: true });
-      const regels = r.groep ? await db.q('SELECT id FROM shifts WHERE groep=?', [r.groep]) : [{ id: r.id }];
+      const regels = !r.groep ? [{ id: r.id }]
+        : (b.alles ? await db.q('SELECT id FROM shifts WHERE groep=?', [r.groep])
+                   : await db.q('SELECT id FROM shifts WHERE groep=? AND datum=?', [r.groep, r.datum]));
       for (const x of regels) {
         await db.exec('UPDATE hours SET shift_id=NULL WHERE shift_id=?', [x.id]).catch(() => {});
         await db.exec('DELETE FROM shifts WHERE id=?', [x.id]);

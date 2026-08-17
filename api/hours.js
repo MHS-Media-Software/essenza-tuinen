@@ -9,6 +9,12 @@ import * as db from './_db.js';
 const VERGRENDELD = ['ingediend', 'akkoord'];
 const SOORTEN = ['werk', 'reis', 'verlof', 'ziek'];
 
+// Nederlandse invoer: '5,5' is net zo geldig als '5.5'.
+function getal(v) {
+  const n = parseFloat(String(v == null ? '' : v).trim().replace(',', '.'));
+  return isFinite(n) ? n : 0;
+}
+
 // Uren uit start/eind/pauze, of het handmatig ingevulde aantal.
 function berekenUren(b) {
   const start = String(b.start || '').slice(0, 5);
@@ -18,18 +24,24 @@ function berekenUren(b) {
     const [eu, em] = eind.split(':').map(Number);
     let min = (eu * 60 + em) - (su * 60 + sm);
     if (min < 0) min += 24 * 60; // doorgewerkt over middernacht
-    min -= Math.max(0, +b.pauze || 0);
+    min -= Math.max(0, getal(b.pauze));
     return Math.max(0, Math.round(min / 0.6) / 100);
   }
-  return Math.max(0, Math.round((+b.uren || 0) * 100) / 100);
+  return Math.max(0, Math.round(getal(b.uren) * 100) / 100);
 }
 
-function valideer(b, uren) {
+// Reistijd staat los van de gewerkte uren: 8 uur werk én 0,5 uur rijden op
+// dezelfde dag, zodat het achteraf apart gefactureerd kan worden.
+function berekenReistijd(b) {
+  return Math.min(24, Math.max(0, Math.round(getal(b.reistijd) * 100) / 100));
+}
+
+function valideer(b, uren, reistijd) {
   const datum = String(b.datum || '').slice(0, 10);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(datum)) return 'Kies een geldige datum.';
   const vandaag = new Date(); vandaag.setHours(23, 59, 59, 999);
   if (new Date(`${datum}T12:00:00`) > vandaag) return 'Je kunt nog geen uren invullen voor een datum in de toekomst.';
-  if (uren <= 0) return 'Vul een begin- en eindtijd in, of een aantal uren.';
+  if (uren <= 0 && !reistijd) return 'Vul een begin- en eindtijd in, of een aantal uren.';
   if (uren > 24) return 'Meer dan 24 uur op één dag kan niet.';
   return null;
 }
@@ -95,15 +107,18 @@ export default async function handler(req, res) {
       // zodat de boekhouder per persoon een bestand kan opslaan.
       if (qy.export === 'csv') {
         if (!magAlles) return res.status(403).json({ ok: false, error: 'Geen toegang tot de export.' });
-        const kop = ['Datum', 'Medewerker', 'Van', 'Tot', 'Pauze (min)', 'Uren', 'Soort', 'Klant', 'Omschrijving', 'Status'];
+        const kop = ['Datum', 'Medewerker', 'Van', 'Tot', 'Pauze (min)', 'Uren', 'Reistijd', 'Soort', 'Klant', 'Omschrijving', 'Status'];
         const regels = rows.map(r => [
           r.datum, r.medewerker || '', r.start || '', r.eind || '', r.pauze || 0,
-          String(r.uren).replace('.', ','), r.soort || 'werk',
+          String(r.uren).replace('.', ','), String(r.reistijd || 0).replace('.', ','), r.soort || 'werk',
           r.lead_naam || r.project || '', String(r.omschrijving || '').replace(/[\r\n;]/g, ' '), r.status,
         ].join(';'));
         // Sluitregel met het totaal: dat is waar de boekhouding op uitkomt.
         const totaal = rows.reduce((s, r) => s + (+r.uren || 0), 0);
-        regels.push(['', 'TOTAAL', '', '', '', String(Math.round(totaal * 100) / 100).replace('.', ','), '', '', '', ''].join(';'));
+        const reisTotaal = rows.reduce((s, r) => s + (+r.reistijd || 0), 0);
+        regels.push(['', 'TOTAAL', '', '', '',
+          String(Math.round(totaal * 100) / 100).replace('.', ','),
+          String(Math.round(reisTotaal * 100) / 100).replace('.', ','), '', '', '', ''].join(';'));
         const csv = [kop.join(';')].concat(regels).join('\r\n');
         let wie = '';
         if (!iedereen) {
@@ -145,7 +160,8 @@ export default async function handler(req, res) {
       if (voorId === ik.id && !magEigen && !magAlles) return res.status(403).json({ ok: false, error: 'Je mag geen uren invullen.' });
 
       const uren = berekenUren(b);
-      const fout = valideer(b, uren);
+      const reistijd = berekenReistijd(b);
+      const fout = valideer(b, uren, reistijd);
       if (fout) return res.status(400).json({ ok: false, error: fout });
       const datum = String(b.datum).slice(0, 10);
 
@@ -157,10 +173,10 @@ export default async function handler(req, res) {
       }
 
       const now = new Date().toISOString();
-      await db.exec(`INSERT INTO hours(user_id,datum,week,start,eind,pauze,uren,soort,lead_id,project,omschrijving,shift_id,status,created,updated)
-        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,'concept',?,?)`,
+      await db.exec(`INSERT INTO hours(user_id,datum,week,start,eind,pauze,uren,reistijd,soort,lead_id,project,omschrijving,shift_id,status,created,updated)
+        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,'concept',?,?)`,
         [voorId, datum, week, String(b.start || '').slice(0, 5) || null, String(b.eind || '').slice(0, 5) || null,
-          Math.max(0, +b.pauze || 0), uren, SOORTEN.includes(b.soort) ? b.soort : 'werk',
+          Math.max(0, Math.round(getal(b.pauze))), uren, reistijd, SOORTEN.includes(b.soort) ? b.soort : 'werk',
           b.lead_id ? +b.lead_id : null, String(b.project || '').slice(0, 160) || null,
           String(b.omschrijving || '').slice(0, 500) || null, b.shift_id ? +b.shift_id : null, now, now]);
       return res.status(200).json({ ok: true });
@@ -207,13 +223,14 @@ export default async function handler(req, res) {
 
       const samen = { ...r, ...b };
       const uren = berekenUren(samen);
-      const fout = valideer(samen, uren);
+      const reistijd = berekenReistijd(samen);
+      const fout = valideer(samen, uren, reistijd);
       if (fout) return res.status(400).json({ ok: false, error: fout });
       const datum = String(samen.datum).slice(0, 10);
-      await db.exec(`UPDATE hours SET datum=?, week=?, start=?, eind=?, pauze=?, uren=?, soort=?, lead_id=?, project=?, omschrijving=?, updated=?
+      await db.exec(`UPDATE hours SET datum=?, week=?, start=?, eind=?, pauze=?, uren=?, reistijd=?, soort=?, lead_id=?, project=?, omschrijving=?, updated=?
         WHERE id=?`,
         [datum, db.isoWeek(datum), String(samen.start || '').slice(0, 5) || null, String(samen.eind || '').slice(0, 5) || null,
-          Math.max(0, +samen.pauze || 0), uren, SOORTEN.includes(samen.soort) ? samen.soort : 'werk',
+          Math.max(0, Math.round(getal(samen.pauze))), uren, reistijd, SOORTEN.includes(samen.soort) ? samen.soort : 'werk',
           samen.lead_id ? +samen.lead_id : null, String(samen.project || '').slice(0, 160) || null,
           String(samen.omschrijving || '').slice(0, 500) || null, now, id]);
       return res.status(200).json({ ok: true });

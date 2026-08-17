@@ -126,6 +126,10 @@ function ensureSchema() {
     .then(() => run([{ sql: 'ALTER TABLE shifts ADD COLUMN groep TEXT' }]).catch(() => {}))
     // Losse namen zonder account die meedraaien (bijvoorbeeld een stagiair).
     .then(() => run([{ sql: 'ALTER TABLE shifts ADD COLUMN extern TEXT' }]).catch(() => {}))
+    // Reistijd staat los van de gewerkte uren: die wordt apart gefactureerd.
+    .then(() => run([{ sql: 'ALTER TABLE hours ADD COLUMN reistijd REAL DEFAULT 0' }]).catch(() => {}))
+    // Handmatig toegevoegde relaties, plus adresgegevens bij een klant.
+    .then(() => run([{ sql: 'ALTER TABLE leads ADD COLUMN adres TEXT' }]).catch(() => {}))
     .catch(e => { _schemaReady = null; throw e; });
   return _schemaReady;
 }
