@@ -29,7 +29,12 @@
     .btn-sec{background:#fff;border:1px solid #E6E8DC;color:#1F2113;padding:.55rem 1rem}.btn-sec:hover{background:#F5F7EE}
     .btn-sec:disabled:hover{background:#fff}
     .btn-danger{background:#fff;border:1px solid #f0c4c4;color:#C0392B;padding:.5rem .8rem}
-    .inp{width:100%;padding:.6rem .8rem;border:1px solid #E6E8DC;border-radius:.6rem;font-size:.9rem;outline:none;background:#fff}
+    .inp{width:100%;min-width:0;padding:.6rem .8rem;border:1px solid #E6E8DC;border-radius:.6rem;font-size:.9rem;outline:none;background:#fff}
+    /* Op een telefoon zoomt Safari automatisch in zodra een veld kleiner dan 16px
+       tekst heeft. Daarom zijn de invoervelden daar precies 16px. */
+    @media (max-width:640px){
+      input:not([type=checkbox]):not([type=radio]), select, textarea, .inp{font-size:16px!important}
+    }
     .inp:focus{border-color:#0B9D46}
     .lbl{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#6B7060}
     /* Zijbalk in de huisstijl: donkere olijftint met wit, zoals het inlogscherm */
@@ -103,6 +108,7 @@
     .dockop{background:#F5F7EE;border:1px solid #E6E8DC;border-radius:.7rem;padding:.7rem}
     @media (max-width:640px){
       .docregel{grid-template-columns:repeat(3,minmax(0,1fr));padding:.6rem;border:1px solid #E6E8DC;border-radius:.7rem}
+      .docregel>*{min-width:0}
       .docregel .oms{grid-column:1/-1}
       .docregel .tot{text-align:right}
     }
@@ -979,10 +985,10 @@
               <template x-for="c in categorien" :key="c"><option :value="c" x-text="c"></option></template>
             </select></div>
           <div><label class="lbl">Naam</label><input class="inp mt-1" x-model="editing.naam" placeholder="bv. Keramische tegel 60x60"></div>
-          <div class="grid grid-cols-3 gap-3">
-            <div><label class="lbl">Inkoop €</label><input type="text" inputmode="decimal" class="inp mt-1" x-model="editing.inkoop"></div>
-            <div><label class="lbl">Uren p/eenh.</label><input type="text" inputmode="decimal" class="inp mt-1" x-model="editing.uren"></div>
-            <div><label class="lbl">Eenheid</label><select class="inp mt-1" x-model="editing.eenheid"><option value="m2">m²</option><option value="m">m</option><option value="stuk">stuk</option></select></div>
+          <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            <div class="min-w-0"><label class="lbl">Inkoop €</label><input type="text" inputmode="decimal" class="inp mt-1" x-model="editing.inkoop"></div>
+            <div class="min-w-0"><label class="lbl">Uren p/eenh.</label><input type="text" inputmode="decimal" class="inp mt-1" x-model="editing.uren"></div>
+            <div class="min-w-0 col-span-2 sm:col-span-1"><label class="lbl">Eenheid</label><select class="inp mt-1" x-model="editing.eenheid"><option value="m2">m²</option><option value="m">m</option><option value="stuk">stuk</option></select></div>
           </div>
           <div><label class="lbl">BTW-tarief</label>
             <select class="inp mt-1" x-model.number="editing.btw">
@@ -1135,10 +1141,10 @@
               </select>
             </div>
           </div>
-          <div class="grid grid-cols-3 gap-3 mt-3">
-            <div><label class="lbl">Van</label><input type="time" class="inp mt-1" x-model="uur.start"></div>
-            <div><label class="lbl">Tot</label><input type="time" class="inp mt-1" x-model="uur.eind"></div>
-            <div><label class="lbl">Pauze (min)</label><input type="text" inputmode="numeric" class="inp mt-1" x-model="uur.pauze"></div>
+          <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-3">
+            <div class="min-w-0"><label class="lbl">Van</label><input type="time" class="inp mt-1" x-model="uur.start"></div>
+            <div class="min-w-0"><label class="lbl">Tot</label><input type="time" class="inp mt-1" x-model="uur.eind"></div>
+            <div class="min-w-0 col-span-2 sm:col-span-1"><label class="lbl">Pauze (min)</label><input type="text" inputmode="numeric" class="inp mt-1" x-model="uur.pauze"></div>
           </div>
           <p class="text-xs mt-2" style="color:#6B7060">
             <span x-show="berekend>0">Dat is <b x-text="urenTekst(berekend)"></b>.</span>
@@ -1232,10 +1238,10 @@
       <h2 class="font-h font-bold text-lg mb-4" x-text="klus&&klus.id?'Klus wijzigen':'Klus inplannen'"></h2>
       <template x-if="klus">
         <div>
-          <div class="grid sm:grid-cols-4 gap-3">
-            <div class="sm:col-span-2"><label class="lbl">Datum</label><input type="date" class="inp mt-1" x-model="klus.datum"></div>
-            <div><label class="lbl">Van</label><input type="time" class="inp mt-1" x-model="klus.van"></div>
-            <div><label class="lbl">Tot</label><input type="time" class="inp mt-1" x-model="klus.tot"></div>
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div class="min-w-0 col-span-2"><label class="lbl">Datum</label><input type="date" class="inp mt-1" x-model="klus.datum"></div>
+            <div class="min-w-0"><label class="lbl">Van</label><input type="time" class="inp mt-1" x-model="klus.van"></div>
+            <div class="min-w-0"><label class="lbl">Tot</label><input type="time" class="inp mt-1" x-model="klus.tot"></div>
           </div>
           <!-- Duurt de klus meer dagen, dan komt hij op elke dag in de planning -->
           <div class="mt-3" x-show="!klus.id">

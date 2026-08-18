@@ -19,7 +19,11 @@
       linear-gradient(135deg,#2C3019 0%,#1F2113 58%,#141609 100%)}
     .et-kaart{animation:etIn .5s cubic-bezier(.2,.8,.2,1)}
     @keyframes etIn{0%{transform:translateY(16px);opacity:0}100%{transform:translateY(0);opacity:1}}
-    .et-in{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.10);color:#fff}
+    .et-in{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.10);color:#fff;min-width:0}
+    /* Onder 16px zoomt Safari op een telefoon automatisch in bij het tikken. */
+    @media (max-width:640px){
+      input:not([type=checkbox]):not([type=radio]), select, textarea, .et-in{font-size:16px!important}
+    }
     .et-in::placeholder{color:rgba(255,255,255,.30)}
     .et-in:focus{outline:none;border-color:transparent;box-shadow:0 0 0 2px rgba(11,157,70,.6)}
     .et-in:disabled{color:rgba(255,255,255,.55)}
