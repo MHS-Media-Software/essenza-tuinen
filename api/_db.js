@@ -111,6 +111,11 @@ function ensureSchema() {
     { sql: `CREATE TABLE IF NOT EXISTS login_attempts ( id INTEGER PRIMARY KEY AUTOINCREMENT, sleutel TEXT, ts INTEGER )` },
     { sql: 'CREATE INDEX IF NOT EXISTS idx_hours_user_datum ON hours(user_id, datum)' },
     { sql: 'CREATE INDEX IF NOT EXISTS idx_hours_week ON hours(week)' },
+    // Onderdelen: een kop (bv. Bestrating) met standaardtekst en standaardregels,
+    // zodat een offerte in één klik gevuld kan worden.
+    { sql: `CREATE TABLE IF NOT EXISTS onderdelen (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, naam TEXT NOT NULL, tekst TEXT,
+      regels TEXT, sort INTEGER DEFAULT 0, created TEXT )` },
     { sql: 'CREATE INDEX IF NOT EXISTS idx_shifts_datum ON shifts(datum)' },
     { sql: 'CREATE INDEX IF NOT EXISTS idx_attempts_ts ON login_attempts(ts)' },
   ])

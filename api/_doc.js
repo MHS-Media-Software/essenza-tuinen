@@ -26,6 +26,7 @@ function computeTotals(regels, btwPct) {
   const round = (n) => Math.round(n * 100) / 100;
   let subtotaal = 0; const per = {};
   for (const r of rs) {
+    if (r && r.kop) continue; // een kop is een tussenkopje, geen bedrag
     const line = (+r.aantal || 0) * (+r.prijs || 0);
     subtotaal += line;
     const rate = r.btw != null && r.btw !== '' ? +r.btw : fallback;
@@ -53,15 +54,36 @@ function renderDocHTML({ kind, doc, bedrijf }) {
     : ['afgewezen', 'verlopen'].includes(doc.status) ? '#C0392B' : '#B8860B';
   const kanReageren = isQuote && (doc.status === 'verzonden' || doc.status === 'concept');
 
-  const rijen = regels.map(r => {
+  // De regels staan op volgorde; een item met kop:true begint een nieuw onderdeel.
+  // Alles daaronder telt op tot één bedrag, en dat is wat de klant ziet — tenzij
+  // bij die kop 'toon' aan staat, dan komen de regels er onder te staan.
+  const losseRegel = (r, sub) => {
     const rt = (+r.aantal || 0) * (+r.prijs || 0);
     const aant = (+r.aantal || 0);
-    return `<tr>
+    return `<tr${sub ? ' class="sub"' : ''}>
       <td>${esc(r.omschrijving || '')}</td>
       <td class="num">${aant % 1 === 0 ? aant : aant.toFixed(1)} ${esc(r.eenheid || '')}</td>
       <td class="num">${euro(r.prijs)}</td>
       <td class="num">${euro(rt)}</td>
     </tr>`;
+  };
+  const groepen = [];
+  let huidig = null;
+  for (const r of regels) {
+    if (r && r.kop) { huidig = { kop: r, regels: [] }; groepen.push(huidig); continue; }
+    if (huidig) huidig.regels.push(r); else groepen.push({ kop: null, regels: [r] });
+  }
+  const rijen = groepen.map(g => {
+    if (!g.kop) return g.regels.map(r => losseRegel(r)).join('');
+    const totaal = g.regels.reduce((s, r) => s + (+r.aantal || 0) * (+r.prijs || 0), 0);
+    const tekst = g.kop.tekst ? `<div class="koptekst">${esc(g.kop.tekst)}</div>` : '';
+    const kopRij = `<tr class="kop">
+      <td><b>${esc(g.kop.omschrijving || 'Onderdeel')}</b>${tekst}</td>
+      <td class="num"></td>
+      <td class="num"></td>
+      <td class="num"><b>${euro(totaal)}</b></td>
+    </tr>`;
+    return kopRij + (g.kop.toon ? g.regels.map(r => losseRegel(r, true)).join('') : '');
   }).join('');
 
   const b = bedrijf;
@@ -90,6 +112,9 @@ function renderDocHTML({ kind, doc, bedrijf }) {
   th{text-align:left;font-size:.68rem;text-transform:uppercase;letter-spacing:.07em;color:${MUTED};border-bottom:2px solid ${LINE};padding:8px 6px}
   td{padding:11px 6px;border-bottom:1px solid ${LINE};font-size:.92rem;vertical-align:top}
   th.num,td.num{text-align:right;white-space:nowrap}
+  tr.kop td{background:#F5F7EE;border-bottom:1px solid ${LINE}}
+  .koptekst{margin-top:6px;font-size:.85rem;color:${MUTED};white-space:pre-line;font-weight:400}
+  tr.sub td{font-size:.85rem;color:${MUTED};padding-left:18px;border-bottom:1px dashed ${LINE}}
   .totrow{display:flex;justify-content:flex-end;margin-top:14px}
   .totbox{width:min(320px,100%)}
   .totline{display:flex;justify-content:space-between;padding:6px 0;font-size:.92rem}
