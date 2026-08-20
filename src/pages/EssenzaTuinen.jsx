@@ -261,18 +261,26 @@ export function GoogleG({ size = 16 }) {
 let introShown = false;
 export function Intro() {
   const [show, setShow] = useState(!introShown);
+  const [weg, setWeg] = useState(introShown);
   useEffect(() => {
-    if (introShown) { setShow(false); return; }
+    if (introShown) { setShow(false); setWeg(true); return; }
     introShown = true;
     const t = setTimeout(() => setShow(false), 1250);
-    return () => clearTimeout(t);
+    // Vangnet: de uitschuif-animatie loopt op beeldschermtikken, en die staan stil
+    // zolang het tabblad op de achtergrond is. Zonder dit bleef de laag daarna over
+    // de site liggen en leek de pagina vast te zitten. Een timer loopt wél door.
+    const t2 = setTimeout(() => setWeg(true), 2600);
+    return () => { clearTimeout(t); clearTimeout(t2); };
   }, []);
+  if (weg) return null;
   return (
     <AnimatePresence>
       {show && (
-        <motion.div className="fixed inset-0 z-[100] flex items-center justify-center overflow-hidden"
+        // pointer-events uit: de laag is puur decoratief en mag nooit klikken of
+        // het muiswiel opvangen. overflow-clip zodat hij zelf geen scrollgebied wordt.
+        <motion.div className="fixed inset-0 z-[100] flex items-center justify-center pointer-events-none"
           initial={{ y: 0 }} exit={{ y: '-100%' }} transition={{ duration: 0.7, ease: [0.76, 0, 0.24, 1] }}
-          style={{ background: NAVY }}>
+          style={{ background: NAVY, overflow: 'clip' }}>
           <div className="absolute -top-40 -right-40 w-[36rem] h-[36rem] rounded-full blur-3xl" style={{ background: 'rgba(11,157,70,0.25)' }} />
           <motion.div initial={{ opacity: 0, y: 14, scale: 0.94 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }} className="relative">
             {LOGO_WHITE
