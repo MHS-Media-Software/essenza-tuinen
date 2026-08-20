@@ -11,5 +11,13 @@ html, body { overflow-x: hidden; max-width: 100%; }
 html { background: #1F2113; overscroll-behavior-y: none; }
 body { overscroll-behavior-y: none; }
 
+/* De achtergrondfoto's in de hero en de paginakoppen worden langzaam ingezoomd.
+   Door die schaling wordt hun vak groter dan de sectie, en een sectie met
+   overflow:hidden verandert daarmee in een scrollgebied: het muiswiel scrolde
+   dan eerst die paar verborgen pixels weg in plaats van de pagina. 'clip'
+   knipt precies hetzelfde weg zonder scrollgebied te worden; 'hidden' blijft
+   ervoor staan voor browsers die clip nog niet kennen. */
+section.overflow-hidden { overflow: hidden; overflow: clip; }
+
 /* Verberg de scrollbalk van de horizontale carousels (reviews/projecten). */
 .mp-carousel::-webkit-scrollbar { display: none; }
