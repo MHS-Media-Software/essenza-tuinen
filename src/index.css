@@ -2,8 +2,12 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Voorkom horizontale overflow/jitter door inschuif-animaties bij het laden. */
-html, body { overflow-x: hidden; max-width: 100%; }
+/* Voorkom horizontale overflow/jitter door inschuif-animaties bij het laden.
+   Bewust 'clip' en niet 'hidden': overflow-x:hidden dwingt overflow-y naar
+   'auto', waardoor html en body zelf scrollcontainers worden en de pagina op
+   sommige machines helemaal niet meer verticaal scrolde (wiel noch toetsenbord).
+   'clip' laat de andere as op 'visible' staan en knipt horizontaal hetzelfde af. */
+html, body { overflow-x: clip; max-width: 100%; }
 
 /* Doorschieten aan het begin en eind van de pagina liet de witte achtergrond
    áchter de site zien. Bovenaan (hero) en onderaan (footer) is de site donker
